@@ -1,0 +1,48 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: "mysql:8.0.34"
+        ports:
+          - "3306:3306"
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 1
+          MYSQL_ROOT_HOST: "%"
+          MYSQL_DATABASE: "sbosc"
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+      redis:
+        image: "bitnami/redis:7.0.4"
+        ports:
+          - "6379:6379"
+        env:
+          ALLOW_EMPTY_PASSWORD: "yes"
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Copy custom MySQL configuration file
+      run: |
+        docker cp ./.github/workflows/conf.d/my.cnf $(docker ps -aqf "name=mysql"):/etc/mysql/conf.d/my.cnf
+        docker kill $(docker ps -aqf "name=mysql")
+        docker start $(docker ps -aqf "name=mysql" -a)
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.11
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest sqlalchemy
+    - name: Run tests
+      run: |
+        python -m pytest -s
