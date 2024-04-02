@@ -1,7 +1,7 @@
 import json
 import os
 
-from config import Env
+from config.env import Env
 from utils import from_string
 
 

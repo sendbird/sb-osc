@@ -1,0 +1,25 @@
+version: '3.5'
+
+services:
+  mysql:
+    image: "mysql:8.0.34"
+    container_name: mysql
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command:
+      [ 'mysqld', '--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci', '--server-id=1', '--log-bin=mysqld-bin']
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_DATABASE: "sbosc"
+
+  redis:
+    image: redis:7.0.4
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  mysql-data:

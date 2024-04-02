@@ -61,3 +61,36 @@ def time_sleep_mock():
     sleep = time.sleep
     with patch('time.sleep', side_effect=lambda duration: sleep(duration / 1000)):
         yield
+
+
+@pytest.fixture(scope='session')
+def redis_data():
+    from modules.redis import RedisData
+    return RedisData(1, False)
+
+
+@pytest.fixture(autouse=True, scope='session')
+def init_migration(config, cursor, redis_data):
+    from sbosc.const import Stage
+    from sbosc.controller.initializer import Initializer
+
+    cursor.execute(f'''
+        SELECT table_name FROM information_schema.tables
+        WHERE table_schema = '{config.SOURCE_DB}'
+    ''')
+    for table, in cursor.fetchall():
+        cursor.execute(f'DROP TABLE {table}')
+
+    for table in [config.SOURCE_TABLE, config.DESTINATION_TABLE]:
+        cursor.execute(f"CREATE TABLE {table} (id int)")
+    migration_id = Initializer().init_migration()
+
+    # Validate Initializer.init_migration
+    assert migration_id == 1
+    assert redis_data.current_stage == Stage.START_EVENT_HANDLER
+    assert redis_data.metadata.source_db == config.SOURCE_DB
+    assert redis_data.metadata.source_table == config.SOURCE_TABLE
+    assert redis_data.metadata.destination_db == config.DESTINATION_DB
+    assert redis_data.metadata.destination_table == config.DESTINATION_TABLE
+    assert redis_data.metadata.source_columns == '`id`'
+    assert redis_data.metadata.start_datetime is not None

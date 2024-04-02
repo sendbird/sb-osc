@@ -6,20 +6,7 @@ from pkgutil import walk_packages
 import yaml
 import dns.resolver
 
-from config import Env
-from sbosc.operations.base import BaseOperation, CrossClusterBaseOperation
-
-
-def get_operation_class(class_name):
-    package = import_module('sbosc.operations')
-
-    for _, name, is_pkg in walk_packages(package.__path__, package.__name__ + '.'):
-        if not is_pkg:
-            module = import_module(name)
-            if hasattr(module, class_name):
-                return getattr(module, class_name)
-
-    raise ImportError(f"Operation class {class_name} not found")
+from config.env import Env
 
 
 def get_cluster_id(endpoint, cluster_id=None) -> str:
@@ -69,7 +56,7 @@ class Config:
     AUTO_SWAP = False
     PREFERRED_WINDOW = '00:00-23:59'
     SKIP_BULK_IMPORT = False
-    OPERATION_CLASS = BaseOperation
+    OPERATION_CLASS = 'BaseOperation'
     INDEXES = []
     INDEX_CREATED_PER_QUERY = 4
 
@@ -106,6 +93,22 @@ class Config:
     PK_SET_MAX_SIZE = 1000000
     EVENT_BATCH_DURATION = 3600
 
+    @property
+    def operation_class(self):
+        if self._operation_class is not None:
+            return self._operation_class
+
+        package = import_module('sbosc.operations')
+
+        for _, name, is_pkg in walk_packages(package.__path__, package.__name__ + '.'):
+            if not is_pkg:
+                module = import_module(name)
+                if hasattr(module, self.OPERATION_CLASS):
+                    self._operation_class = getattr(module, self.OPERATION_CLASS)
+                    return self._operation_class
+
+        raise ImportError(f"Operation class {self.OPERATION_CLASS} not found")
+
     def __init__(self):
         env = Env()
         if os.path.exists(env.CONFIG_FILE):
@@ -113,9 +116,6 @@ class Config:
                 config = yaml.safe_load(f)
                 for key, value in config.items():
                     setattr(self, key.upper(), value)
-
-        if type(self.OPERATION_CLASS) == str:
-            self.OPERATION_CLASS = get_operation_class(self.OPERATION_CLASS)
 
         if self.DESTINATION_WRITER_ENDPOINT is None:
             self.DESTINATION_WRITER_ENDPOINT = self.SOURCE_WRITER_ENDPOINT
@@ -125,8 +125,8 @@ class Config:
             self.DESTINATION_DB = self.SOURCE_DB
         if self.SOURCE_WRITER_ENDPOINT != self.DESTINATION_WRITER_ENDPOINT:
             self.AUTO_SWAP = False
-            if self.OPERATION_CLASS == BaseOperation:
-                self.OPERATION_CLASS = CrossClusterBaseOperation
+            if self.OPERATION_CLASS == 'BaseOperation':
+                self.OPERATION_CLASS = 'CrossClusterBaseOperation'
         if self.SOURCE_DB != self.DESTINATION_DB:
             self.AUTO_SWAP = False
 
@@ -141,3 +141,5 @@ class Config:
 
         if self.SKIP_BULK_IMPORT and self.INIT_BINLOG_FILE is None:
             raise ValueError('INIT_BINLOG_FILE is required when SKIP_BULK_IMPORT is True')
+
+        self._operation_class = None  # Will be set by property operation_class

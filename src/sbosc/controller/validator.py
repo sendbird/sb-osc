@@ -28,7 +28,7 @@ class DataValidator:
         self.thread_count = config.VALIDATION_THREAD_COUNT
         self.db = Database()
         self.redis_data = RedisData(self.migration_id)
-        self.migration_operation: MigrationOperation = config.OPERATION_CLASS(self.migration_id)
+        self.migration_operation: MigrationOperation = config.operation_class(self.migration_id)
         self.logger = controller.logger
 
         self.source_conn_pool = self.db.get_reader_connection_pool(self.thread_count)

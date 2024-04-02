@@ -55,7 +55,7 @@ class Worker:
         self.db = Database()
         self.redis_data = RedisData(self.migration_id)
         self.logger = manager.logger
-        self.migration_operation: MigrationOperation = config.OPERATION_CLASS(self.migration_id)
+        self.migration_operation: MigrationOperation = config.operation_class(self.migration_id)
         self.use_batch_size_multiplier = config.USE_BATCH_SIZE_MULTIPLIER
         self.worker_id = worker_id
         self.stop_flag = False
