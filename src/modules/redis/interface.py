@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Self
 
-from config import config
+from config import config, env
 from modules.redis.schema import RedisKey, Metadata, WorkerConfig, WorkerMetric, ChunkInfo
 from modules.redis.connect import get_redis_connection
 from modules.redis.data_types import Set, Stack, SortedSet

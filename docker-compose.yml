@@ -6,8 +6,6 @@ services:
     container_name: mysql
     ports:
       - "3306:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
     command:
       [ 'mysqld', '--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci', '--server-id=1', '--log-bin=mysqld-bin']
     environment:
@@ -20,6 +18,3 @@ services:
     container_name: redis
     ports:
       - "6379:6379"
-
-volumes:
-  mysql-data:

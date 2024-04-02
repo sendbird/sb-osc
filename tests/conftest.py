@@ -6,8 +6,10 @@ import MySQLdb
 import pytest
 from sqlalchemy import create_engine
 
+from modules.logger import get_logger
+
 # current dir
-PATH = os.getcwd()
+PATH = os.path.dirname(os.path.abspath(__file__))
 
 ENVS = {
     'AWS_REGION': 'ap-northeast-2',
@@ -16,6 +18,9 @@ ENVS = {
     'SECRET_FILE': f'{PATH}/configs/secrets.json',
 }
 os.environ.update(ENVS)
+
+# Set up logger
+get_logger()
 
 
 @pytest.fixture(scope='session')
@@ -42,6 +47,7 @@ def cursor(config, secret):
         port=secret.PORT,
         user=secret.USERNAME,
         password=secret.PASSWORD,
+        db=config.SOURCE_DB,
         autocommit=True
     )
     with connection.cursor() as cursor:
@@ -94,3 +100,8 @@ def init_migration(config, cursor, redis_data):
     assert redis_data.metadata.destination_table == config.DESTINATION_TABLE
     assert redis_data.metadata.source_columns == '`id`'
     assert redis_data.metadata.start_datetime is not None
+
+
+@pytest.fixture(scope='module', params=['BaseOperation', 'CrossClusterBaseOperation'])
+def override_operation_class(request):
+    config.OPERATION_CLASS = request.param

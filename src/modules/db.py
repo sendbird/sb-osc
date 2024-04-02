@@ -58,6 +58,7 @@ class Connection:
             user=secret.USERNAME,
             password=secret.PASSWORD,
             port=secret.PORT,
+            autocommit=True
         )
 
     def cursor(self, cursorclass=None):

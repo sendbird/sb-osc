@@ -141,7 +141,6 @@ class Worker:
 
                 # update last pk inserted
                 if cursor.rowcount == self.worker_config.raw_batch_size:
-                    print('last row id', cursor.lastrowid)
                     last_pk_inserted = cursor.lastrowid
                 else:
                     last_pk_inserted = batch_end_pk

@@ -52,7 +52,7 @@ class WorkerManager(SBOSCComponent):
         self.logger.info(f"Adding {self.desired_thread_count - self.thread_count} threads")
         while self.thread_count < self.desired_thread_count:
             self.created_threads += 1
-            worker = Worker(f'worker_{self.created_threads}', config, self)
+            worker = Worker(f'worker_{self.created_threads}', self)
             self.worker_threads.append((worker, self.executor.submit(worker.start)))
 
     def remove_threads(self):

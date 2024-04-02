@@ -200,7 +200,7 @@ class Initializer:
                 config.SOURCE_CLUSTER_ID,
                 config.SOURCE_DB,
                 config.SOURCE_TABLE,
-                config.cluster_id,
+                config.DESTINATION_CLUSTER_ID,
                 config.DESTINATION_DB,
                 config.DESTINATION_TABLE
             ))
