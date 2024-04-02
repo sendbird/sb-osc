@@ -9,7 +9,6 @@ from config import config
 from sbosc.component import SBOSCComponent
 from sbosc.const import Stage
 
-from config import env
 from modules.aws import CloudWatch
 
 

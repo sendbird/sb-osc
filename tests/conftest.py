@@ -15,7 +15,7 @@ ENVS = {
     'AWS_REGION': 'ap-northeast-2',
     'POD_NAME': 'local',
     'CONFIG_FILE': f'{PATH}/configs/config.yaml',
-    'SECRET_FILE': f'{PATH}/configs/secrets.json',
+    'SECRET_FILE': f'{PATH}/configs/secret.json',
 }
 os.environ.update(ENVS)
 

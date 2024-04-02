@@ -45,4 +45,5 @@ jobs:
         pip install pytest sqlalchemy
     - name: Run tests
       run: |
+        export PYTHONPATH="$(pwd)/src"
         python -m pytest -s

@@ -12,7 +12,7 @@ class Env:
     AWS_REGION: str = 'ap-northeast-2'
     POD_NAME: str = 'local'  # POD_NAME = 'local' will determine whether it's running in a local environment or not.
     CONFIG_FILE: str = '/opt/sb-osc/config.yaml'
-    SECRET_FILE: str = '/opt/sb-osc/secrets.json'
+    SECRET_FILE: str = '/opt/sb-osc/secret.json'
 
     def __init__(self, **envs):
         """
