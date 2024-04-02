@@ -82,22 +82,28 @@ def test_setup_table(cursor, setup_table):
     assert result[0][0] in TEST_TABLE_VALUES
 
 
+def check_thread_count(_worker_manager, desired_thread_count):
+    for _ in range(10):
+        if _worker_manager.desired_thread_count == desired_thread_count and \
+                _worker_manager.thread_count == desired_thread_count:
+            break
+        time.sleep(100)
+    assert _worker_manager.thread_count == desired_thread_count
+    assert _worker_manager.desired_thread_count == desired_thread_count
+
+
 def test_add_remove_thread(worker_manager, redis_data):
     # init condition check
     assert worker_manager.desired_thread_count == 0
 
     # add thread
     redis_data.worker_config.thread_count = 3
-    time.sleep(100)
-    assert worker_manager.desired_thread_count == 3
-    assert worker_manager.thread_count == 3
+    check_thread_count(worker_manager, 3)
     assert worker_manager.created_threads == 3
 
     # remove thread
     redis_data.worker_config.thread_count = 1
-    time.sleep(100)
-    assert worker_manager.desired_thread_count == 1
-    assert worker_manager.thread_count == 1
+    check_thread_count(worker_manager, 1)
     assert worker_manager.created_threads == 3
 
 
@@ -172,13 +178,7 @@ def test_bulk_import(setup_table, cursor, worker_manager, request_id, redis_data
     desired_thread_count = 5
     redis_data.worker_config.thread_count = desired_thread_count
     redis_data.worker_config.batch_size = 300
-
-    for _ in range(10):
-        if worker_manager.desired_thread_count == desired_thread_count and \
-                worker_manager.thread_count == desired_thread_count:
-            break
-        time.sleep(100)
-    assert worker_manager.desired_thread_count == desired_thread_count
+    check_thread_count(worker_manager, 5)
 
     # Check worker status
     time.sleep(100)

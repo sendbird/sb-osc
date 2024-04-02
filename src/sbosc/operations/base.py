@@ -8,7 +8,7 @@ import sbosc.operations.utils as operation_utils
 class BaseOperation(MigrationOperation):
     def _insert_batch_query(self, start_pk, end_pk):
         return f'''
-            INSERT INTO {self.source_db}.{self.destination_table}({self.source_columns})
+            INSERT INTO {self.destination_db}.{self.destination_table}({self.source_columns})
             SELECT {self.source_columns}
             FROM {self.source_db}.{self.source_table}
             WHERE id BETWEEN {start_pk} AND {end_pk}
@@ -28,7 +28,7 @@ class BaseOperation(MigrationOperation):
         with db.cursor() as cursor:
             updated_pks_str = ",".join([str(pk) for pk in updated_pks])
             query = f'''
-                INSERT INTO {self.source_db}.{self.destination_table}({self.source_columns})
+                INSERT INTO {self.destination_db}.{self.destination_table}({self.source_columns})
                 SELECT {self.source_columns}
                 FROM {self.source_db}.{self.source_table}
                 WHERE id IN ({updated_pks_str})
@@ -40,7 +40,7 @@ class BaseOperation(MigrationOperation):
     def _get_not_imported_pks_query(self, start_pk, end_pk):
         return f'''
             SELECT source.id FROM {self.source_db}.{self.source_table} AS source
-            LEFT JOIN {self.source_db}.{self.destination_table} AS dest ON source.id = dest.id
+            LEFT JOIN {self.destination_db}.{self.destination_table} AS dest ON source.id = dest.id
             WHERE source.id BETWEEN {start_pk} AND {end_pk}
             AND dest.id IS NULL
         '''
@@ -59,7 +59,7 @@ class BaseOperation(MigrationOperation):
         if event_pks:
             source_cursor.execute(f'''
                 SELECT source.id FROM {self.source_db}.{self.source_table} AS source
-                LEFT JOIN {self.source_db}.{self.destination_table} AS dest ON source.id = dest.id
+                LEFT JOIN {self.destination_db}.{self.destination_table} AS dest ON source.id = dest.id
                 WHERE source.id IN ({event_pks})
                 AND dest.id IS NULL
             ''')
@@ -78,7 +78,7 @@ class BaseOperation(MigrationOperation):
                     WHERE id IN ({event_pks})
                     UNION ALL
                     SELECT {self.source_columns}, 'destination' AS table_type
-                    FROM {self.source_db}.{self.destination_table}
+                    FROM {self.destination_db}.{self.destination_table}
                     WHERE id IN ({event_pks})
                 ) AS combined
                 GROUP BY {self.source_columns}
@@ -95,7 +95,7 @@ class BaseOperation(MigrationOperation):
                 SELECT combined.id FROM (
                     SELECT {self.source_columns} FROM {self.source_db}.{self.source_table}
                     WHERE id IN ({not_updated_pks_str}) UNION ALL
-                    SELECT {self.source_columns} FROM {self.source_db}.{self.destination_table}
+                    SELECT {self.source_columns} FROM {self.destination_db}.{self.destination_table}
                     WHERE id IN ({not_updated_pks_str})
                 ) AS combined GROUP BY {self.source_columns} HAVING COUNT(*) = 2
             ''')
@@ -114,7 +114,7 @@ class BaseOperation(MigrationOperation):
             cursor: Cursor
             cursor.execute(f'''
                 SELECT source_pk FROM sbosc.unmatched_rows WHERE source_pk NOT IN (
-                    SELECT id FROM {self.source_db}.{self.destination_table}
+                    SELECT id FROM {self.destination_db}.{self.destination_table}
                     WHERE id IN ({not_removed_pks_str})
                 ) AND source_pk IN ({not_removed_pks_str})
             ''')

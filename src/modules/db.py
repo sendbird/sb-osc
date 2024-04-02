@@ -71,6 +71,11 @@ class Connection:
         cursor: cursorclass = self._conn.cursor(cursorclass)
         return cursor
 
+    def ping(self):
+        if not self._conn:
+            self._conn = self.connect()
+        self._conn.ping()
+
     def close(self):
         if self._conn:
             self._conn.close()

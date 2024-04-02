@@ -79,7 +79,7 @@ class EventHandler(SBOSCComponent):
 
         # BinlogStreamReader
         self.connection_settings = {
-            'host': config.writer_endpoint,
+            'host': config.SOURCE_WRITER_ENDPOINT,
             'port': secret.PORT,
             'user': secret.USERNAME,
             'passwd': secret.PASSWORD,
