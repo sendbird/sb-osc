@@ -44,4 +44,3 @@ class RedisKey:
     CHUNK_SET = 'sb-osc:{}:{}:bulk_import:chunk_set'
     CHUNK_INFO = 'sb-osc:{}:{}:bulk_import:chunk_info:{}'
     OLD_SOURCE_TABLE = 'sb-osc:{}:{}:old_source_table'
-

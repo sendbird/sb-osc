@@ -48,4 +48,3 @@ def get_logger(default_tags=None):
         logger.addHandler(handler)
 
     return logger
-
