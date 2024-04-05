@@ -1,5 +1,6 @@
 import signal
 import time
+from datetime import datetime
 
 import MySQLdb
 from MySQLdb.cursors import Cursor
@@ -34,8 +35,13 @@ class SBOSCComponent:
     def set_stop_flag(self):
         self.stop_flag = True
 
-    def is_preferred_window(self):
-        pass
+    @staticmethod
+    def is_preferred_window():
+        current_time = datetime.now().time()
+        start_time_str, end_time_str = config.PREFERRED_WINDOW.split('-')
+        start_time = datetime.strptime(start_time_str, '%H:%M').time()
+        end_time = datetime.strptime(end_time_str, '%H:%M').time()
+        return start_time <= current_time <= end_time
 
     def get_migration_id(self):
         if not config.SOURCE_TABLE or not config.DESTINATION_TABLE:
