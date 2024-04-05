@@ -70,7 +70,7 @@ class MetricMonitor(SBOSCComponent):
             "sb_osc_updated_pk_set_length": ("Length of updated PK set", PrometheusMetricSender.GAUGE),
             "sb_osc_removed_pk_set_length": ("Length of removed PK set", PrometheusMetricSender.GAUGE),
             "sb_osc_unmatched_rows": ("Number of unmatched row count", PrometheusMetricSender.GAUGE),
-        }, label_keys=["dbclusteridentifier", "sbregion", "migration_id"])
+        }, label_keys=["dbclusteridentifier", "migration_id"])
         self.metric_sender.set_labels(labels={
             "dbclusteridentifier": config.SOURCE_CLUSTER_ID,
             "migration_id": self.migration_id

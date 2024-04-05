@@ -1,0 +1,79 @@
+awsRegion: 'ap-northeast-2'
+
+# ExternalSecret
+secretName: sb-osc
+
+# ServiceAccount
+sboscRoleArn: ""
+externalsecretsRoleArn: ""
+
+# Reids
+redis:
+  memory: 1000Mi
+
+# Envs
+configFile: "/opt/sb-osc/config.yaml"
+secretFile: "/opt/sb-osc/secret.json"
+
+# SB-OSC Config
+sbosc:
+  enabled: false
+  default:
+    image: ""
+    workers: 1
+    resources:
+      controller:
+        requests:
+          cpu: 500m
+          memory: 500Mi
+      eventhandler:
+        requests:
+          cpu: 2
+          memory: 500Mi
+      worker:
+        requests:
+          cpu: 500m
+          memory: 500Mi
+      monitor:
+        requests:
+          cpu: 50m
+          memory: 100Mi
+
+    config:
+      auto_swap: false
+      bypass_least_busy_hour: false
+
+      source_writer_endpoint: ""
+
+      min_chunk_size: 100000
+      max_chunk_count: 200
+
+      min_batch_size: 200
+      max_batch_size: 1000
+      batch_size_step_size: 200
+
+      min_thread_count: 1
+      max_thread_count: 8
+      thread_count_step_size: 1
+
+      commit_interval: 1
+      use_batch_size_multiplier: true
+
+      # Monitor
+      optimal_value_use_limit: 3
+      cpu_soft_threshold: 40
+      cpu_hard_threshold: 60
+      latency_soft_threshold: 30
+      latency_hard_threshold: 50
+
+      # EventHandler
+      event_handler_thread_count: 4
+      event_handler_thread_timeout: 300
+
+#  instances:
+#    - name:
+#      config:
+#        source_db:
+#        source_table:
+#        destination_db:
+#        destination_table:

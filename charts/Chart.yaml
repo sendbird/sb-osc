@@ -1,0 +1,3 @@
+apiVersion: v2
+name: sb-osc
+version: 0.0.1

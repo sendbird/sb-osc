@@ -58,8 +58,13 @@ class SBOSCComponent:
                 ))
                 return cursor.fetchone()[0] if cursor.rowcount > 0 else None
 
+            except MySQLdb.OperationalError as e:
+                if e.args[0] == 1049:
+                    print(f"Database not found. {e.args[1]}")
+                    return None
+
             except MySQLdb.ProgrammingError as e:
-                if e.args[0] == 1146:  # database or table doesn't exist
+                if e.args[0] == 1146:
                     print(f"Table not found. {e.args[1]}")
                     return None
                 raise e
