@@ -40,7 +40,6 @@ class Controller(SBOSCComponent):
         stage_actions = {
             Stage.BULK_IMPORT_CHUNK_CREATION: self.create_bulk_import_chunks,
             Stage.BULK_IMPORT_VALIDATION: self.validate_bulk_import,
-            Stage.APPLY_DML_EVENTS: self.apply_dml_events,
             Stage.ADD_INDEX: self.add_index,
             Stage.APPLY_DML_EVENTS_VALIDATION: self.apply_dml_events_validation,
             Stage.SWAP_TABLES: self.swap_tables,
@@ -172,15 +171,6 @@ class Controller(SBOSCComponent):
             except StopFlagSet:
                 return
 
-    def apply_dml_events(self):
-        self.logger.info("Resetting worker config to minimum values")
-        revision = self.redis_data.worker_config.revision or 0  # If revision is None, set to 0
-        self.redis_data.worker_config.set({
-            'batch_size': config.MIN_BATCH_SIZE,
-            'thread_count': config.MIN_THREAD_COUNT,
-            'commit_interval': config.COMMIT_INTERVAL,
-            'revision': revision + 1
-        })
 
     def apply_dml_events_validation(self):
         self.interval = 10
@@ -303,6 +293,12 @@ class Controller(SBOSCComponent):
                     subtitle="Finished creating indexes", message=f"Indexes: {index_names}", color="good")
 
         if finished_all_creation:
+            self.logger.info("Resetting worker config")
+            self.redis_data.worker_config.set({
+                'batch_size': config.MIN_BATCH_SIZE,
+                'thread_count': 0,
+                'revision': self.redis_data.worker_config.revision + 1
+            })
             self.redis_data.set_current_stage(Stage.APPLY_DML_EVENTS)
 
     def swap_tables(self):

@@ -324,7 +324,7 @@ class MetricMonitor(SBOSCComponent):
                     log_file, log_pos = cursor.fetchone()
                     remaining_binlog_size = 0
                     cursor.execute("SHOW BINARY LOGS")
-                    for log_name, file_size in cursor.fetchall():
+                    for log_name, file_size, *_ in cursor.fetchall():  # *_ if for MySQL 5.7 and 8.0 compatibility
                         if log_name >= log_file:
                             remaining_binlog_size += file_size
                     remaining_binlog_size -= log_pos

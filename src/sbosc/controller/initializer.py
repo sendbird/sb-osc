@@ -153,8 +153,7 @@ class Initializer:
             ''')
             self.logger.info("Event handler status table created")
 
-    def fetch_metadata(self, migration_id):
-        redis_data = RedisData(migration_id)
+    def fetch_metadata(self, redis_data):
         metadata = redis_data.metadata
 
         # Config data
@@ -232,8 +231,18 @@ class Initializer:
                 ''')
             self.logger.info("DML log tables created")
 
+            redis_data = RedisData(migration_id)
+
             # Fetch metadata
-            self.fetch_metadata(migration_id)
+            self.fetch_metadata(redis_data)
+
+            # Set initial worker config
+            redis_data.worker_config.set({
+                'batch_size': config.MIN_BATCH_SIZE,
+                'thread_count': config.MIN_THREAD_COUNT,
+                'commit_interval': config.COMMIT_INTERVAL,
+                'revision': 0,
+            })
 
             slack = SlackClient("SB-OSC Controller", f'{config.SOURCE_CLUSTER_ID}, {migration_id}')
             slack.send_message(

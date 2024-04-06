@@ -63,7 +63,7 @@ def controller(request, redis_data):
 ########
 def test_chunk_creation(controller, setup_table, redis_data):
     controller, controller_thread = controller
-    controller.initializer.fetch_metadata(1)
+    controller.initializer.fetch_metadata(redis_data)
     redis_data.set_current_stage(Stage.BULK_IMPORT_CHUNK_CREATION)
     while redis_data.current_stage != Stage.BULK_IMPORT:
         assert controller_thread.is_alive()
@@ -170,8 +170,8 @@ def test_add_index(controller: Controller, setup_table, cursor, case):
 
 @pytest.mark.parametrize('setup_table', ['with_data'], indirect=True)
 @pytest.mark.parametrize('controller', ['object'], indirect=True)
-def test_apply_dml_events_validation(controller: Controller, setup_table, cursor, override_operation_class):
-    controller.initializer.fetch_metadata(1)
+def test_apply_dml_events_validation(controller: Controller, setup_table, redis_data, cursor, override_operation_class):
+    controller.initializer.fetch_metadata(redis_data)
 
     timestamp_range = (1, 100)
     insert_events = [(random.randint(1, TABLE_SIZE), random.randint(*timestamp_range)) for _ in range(500)]
