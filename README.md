@@ -56,14 +56,18 @@ load when production traffic increases.
 
 SB-OSC is designed to work with Aurora MySQL database, and it's an EKS-based tool.
 
-It requires the following components to run:
+It requires the following resources to run:
 
 - Aurora MySQL database (v2, v3)
 - EKS cluster
-- ExternalSecrets (AWS Secrets Manager)
+- AWS SecretsManager secret
 - IAM role
+
+SB-OSC accepts `ROW` for binlog format. It is recommended to set `binlog-ignore-db` to `sbosc` to prevent SB-OSC from processing its own binlog events.
 - `binlog_format` set to `ROW`
 - `binlog-ignore-db` set to `sbosc` (Recommended)
+
+Detailed requirements and setup instructions can be found in the [usage guide](doc/usage.md).
 
 ## Performance
 
