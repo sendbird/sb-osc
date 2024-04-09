@@ -1,25 +1,27 @@
+# See github.com/sendbird/sb-osc/blob/main/doc/config.md for more information
+
 awsRegion: 'ap-northeast-2'
 
 # ExternalSecret
-secretName: sb-osc
+secretName: ""  # SecretsManager secret name
 
 # ServiceAccount
-sboscRoleArn: ""
-externalsecretsRoleArn: ""
+sboscRoleArn: ""  # SB-OSC ServiceAccount role ARN
+externalsecretsRoleArn: ""  # ExternalSecrets ServiceAccount role ARN
 
 # Reids
 redis:
   memory: 1000Mi
 
 # Envs
-configFile: "/opt/sb-osc/config.yaml"
-secretFile: "/opt/sb-osc/secret.json"
+configFile: "/opt/sb-osc/config.yaml"  # SB-OSC config mount path
+secretFile: "/opt/sb-osc/secret.json"  # SB-OSC secret mount path
 
 # SB-OSC Config
 sbosc:
-  enabled: false
+  enabled: false  # Enable SB-OSC
   default:
-    image: ""
+    image: ""  # SB-OSC image
     workers: 1
     resources:
       controller:
@@ -40,14 +42,18 @@ sbosc:
           memory: 100Mi
 
     config:
-      auto_swap: false
-      bypass_least_busy_hour: false
+      auto_swap: false  # Whether to swap tables automatically
+      preferred_window: "00:00-23:59"  # Preferred window for swapping tables & bulk import validation
 
       source_writer_endpoint: ""
+      source_reader_endpoint: ""
+      destination_writer_endpoint: ""
+      destination_reader_endpoint: ""
 
       min_chunk_size: 100000
       max_chunk_count: 200
 
+      # Worker
       min_batch_size: 200
       max_batch_size: 1000
       batch_size_step_size: 200
@@ -60,20 +66,29 @@ sbosc:
       use_batch_size_multiplier: true
 
       # Monitor
-      optimal_value_use_limit: 3
-      cpu_soft_threshold: 40
-      cpu_hard_threshold: 60
-      latency_soft_threshold: 30
-      latency_hard_threshold: 50
+      cpu_soft_threshold: 40  # Soft threshold for CPU usage. If the CPU usage exceeds this value, thread count will be decreased into half.
+      cpu_hard_threshold: 60  # Hard threshold for CPU usage. If the CPU usage exceeds this value, thread count will be decreased to 0.
+      latency_soft_threshold: 30  # Soft threshold for WriteLatency. If the latency exceeds this value, batch size will be decreased into half.
+      latency_hard_threshold: 50  # Hard threshold for WriteLatency. If the latency exceeds this value, batch size will be decreased to 0.
 
       # EventHandler
-      event_handler_thread_count: 4
-      event_handler_thread_timeout: 300
+      event_handler_thread_count: 4  # Number of threads for EventHandler. Max number of binlog files to read at once. (Max 4 recommended)
+      event_handler_thread_timeout: 300  # Timeout for EventHandler thread. If the thread is not finished within this time, it raises exception and restarts EventHandler.
 
-#  instances:
-#    - name:
-#      config:
-#        source_db:
-#        source_table:
-#        destination_db:
-#        destination_table:
+      # EventLoader
+      pk_set_max_size: 1000000  # Max number of DML PKs to load from DB at once. No more than 2 * pk_set_max_size will be kept in Redis. This is used for memory optimization.
+      event_batch_duration: 3600  # Timestamp range of DML events to load from DB at once (seconds).
+
+      # Validator
+      bulk_import_validation_batch_size: 1000000  # Batch size for bulk import validation
+      apply_dml_events_validation_batch_size: 3000  # Batch size for DML event validation
+      full_dml_event_validation_interval: 1  # Interval for full DML event validation (hours)
+      validation_thread_count: 4  # Number of threads to use for validation process
+
+  instances:
+    - name:
+      config:
+        source_db:
+        source_table:
+        destination_db:
+        destination_table:
