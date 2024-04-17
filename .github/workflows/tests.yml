@@ -31,7 +31,7 @@ jobs:
     - uses: actions/checkout@v2
     - name: Copy custom MySQL configuration file
       run: |
-        docker cp ./.github/workflows/conf.d/my.cnf $(docker ps -aqf "name=mysql"):/etc/mysql/conf.d/my.cnf
+        docker cp ./tests/configs/my.cnf $(docker ps -aqf "name=mysql"):/etc/mysql/conf.d/my.cnf
         docker kill $(docker ps -aqf "name=mysql")
         docker start $(docker ps -aqf "name=mysql" -a)
     - name: Set up Python 3.11
