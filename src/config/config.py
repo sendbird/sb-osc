@@ -127,8 +127,6 @@ class Config:
             self.AUTO_SWAP = False
             if self.OPERATION_CLASS == 'BaseOperation':
                 self.OPERATION_CLASS = 'CrossClusterBaseOperation'
-        if self.SOURCE_DB != self.DESTINATION_DB:
-            self.AUTO_SWAP = False
 
         self.SOURCE_CLUSTER_ID = get_cluster_id(self.SOURCE_WRITER_ENDPOINT, self.SOURCE_CLUSTER_ID)
         self.DESTINATION_CLUSTER_ID = get_cluster_id(self.DESTINATION_WRITER_ENDPOINT, self.DESTINATION_CLUSTER_ID)
