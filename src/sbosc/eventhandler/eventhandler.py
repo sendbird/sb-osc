@@ -69,8 +69,8 @@ class EventStore:
 class EventHandler(SBOSCComponent):
     def __init__(self):
         super().__init__()
-        self.thread_count = config.EVENT_HANDLER_THREAD_COUNT
-        self.thread_timeout = config.EVENT_HANDLER_THREAD_TIMEOUT
+        self.thread_count = config.EVENTHANDLER_THREAD_COUNT
+        self.thread_timeout = config.EVENTHANDLER_THREAD_TIMEOUT_IN_SECONDS
         self.slack = SlackClient('SB-OSC EventHandler', f'{config.SOURCE_CLUSTER_ID}, {self.migration_id}')
 
         # EventLoader

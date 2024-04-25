@@ -97,7 +97,7 @@ class Controller(SBOSCComponent):
         self.redis_data.worker_config.set({
             'batch_size': config.MIN_BATCH_SIZE,
             'thread_count': config.MIN_THREAD_COUNT,
-            'commit_interval': config.COMMIT_INTERVAL,
+            'commit_interval': config.COMMIT_INTERVAL_IN_SECONDS,
             'revision': 0,
         })
 
@@ -117,7 +117,7 @@ class Controller(SBOSCComponent):
                     f"Chunk size: {chunk_size}\n"
                     f"Batch size: {config.MIN_BATCH_SIZE}\n"
                     f"Thread count: {config.MIN_THREAD_COUNT}\n"
-                    f"Commit interval: {config.COMMIT_INTERVAL}"
+                    f"Commit interval: {config.COMMIT_INTERVAL_IN_SECONDS}"
         )
 
     def validate_bulk_import(self):
@@ -172,7 +172,7 @@ class Controller(SBOSCComponent):
                 return
 
     def apply_dml_events_validation(self):
-        self.interval = 10
+        self.interval = config.APPLY_DML_EVENTS_VALIDATION_INTERVAL_IN_SECONDS
 
         try:
             is_valid = self.validator.apply_dml_events_validation()
@@ -191,7 +191,7 @@ class Controller(SBOSCComponent):
                     return
                 if not config.AUTO_SWAP:
                     self.logger.info("Auto swap is disabled")
-                    time.sleep(60)
+                    time.sleep(config.WAIT_INTERVAL_UNTIL_AUTO_SWAP_IN_SECONDS)
                     return
 
                 is_valid = self.validator.full_dml_event_validation()

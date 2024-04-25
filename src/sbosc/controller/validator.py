@@ -24,7 +24,7 @@ class DataValidator:
         self.migration_id = controller.migration_id
         self.bulk_import_batch_size = config.BULK_IMPORT_VALIDATION_BATCH_SIZE
         self.apply_dml_events_batch_size = config.APPLY_DML_EVENTS_VALIDATION_BATCH_SIZE
-        self.full_dml_event_validation_interval = config.FULL_DML_EVENT_VALIDATION_INTERVAL
+        self.full_dml_event_validation_interval = config.FULL_DML_EVENT_VALIDATION_INTERVAL_IN_HOURS
         self.thread_count = config.VALIDATION_THREAD_COUNT
         self.db = Database()
         self.redis_data = RedisData(self.migration_id)

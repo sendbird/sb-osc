@@ -20,7 +20,7 @@ class EventLoader:
         self.logger = event_handler.logger
 
         self.last_loaded_timestamp = 1
-        self.batch_duration = config.EVENT_BATCH_DURATION
+        self.batch_duration = config.EVENT_BATCH_DURATION_IN_SECONDS
 
         self.stop_flag = False
 

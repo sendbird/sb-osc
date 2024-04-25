@@ -240,7 +240,7 @@ class Initializer:
             redis_data.worker_config.set({
                 'batch_size': config.MIN_BATCH_SIZE,
                 'thread_count': config.MIN_THREAD_COUNT,
-                'commit_interval': config.COMMIT_INTERVAL,
+                'commit_interval': config.COMMIT_INTERVAL_IN_SECONDS,
                 'revision': 0,
             })
 

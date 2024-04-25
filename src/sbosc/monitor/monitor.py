@@ -234,18 +234,18 @@ class MetricMonitor(SBOSCComponent):
             next_batch_size = current_batch_size
             next_thread_count = max(config.MIN_THREAD_COUNT, current_thread_count // 2)
 
-        elif write_latency > config.LATENCY_HARD_THRESHOLD:
+        elif write_latency > config.WRITE_LATENCY_HARD_THRESHOLD:
             self.logger.warning("Latency exceeded hard threshold. Setting thread count to 0.")
             next_batch_size = config.MIN_BATCH_SIZE
             next_thread_count = 0
 
-        elif write_latency > config.LATENCY_SOFT_THRESHOLD:
+        elif write_latency > config.WRITE_LATENCY_SOFT_THRESHOLD:
             self.logger.warning("Latency exceeded soft threshold. Start decreasing batch size.")
             next_batch_size = max(config.MIN_BATCH_SIZE, current_batch_size // 2)
             next_thread_count = current_thread_count
 
         elif writer_cpu < config.CPU_SOFT_THRESHOLD and \
-                write_latency < config.LATENCY_SOFT_THRESHOLD and current_thread_count == 0:
+                write_latency < config.WRITE_LATENCY_SOFT_THRESHOLD and current_thread_count == 0:
             self.logger.info("Writer became stable. Restoring thread count to MIN_THREAD_COUNT.")
             next_batch_size = current_batch_size
             next_thread_count = config.MIN_THREAD_COUNT

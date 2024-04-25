@@ -62,27 +62,28 @@ sbosc:
       max_thread_count: 8
       thread_count_step_size: 1
 
-      commit_interval: 1
+      commit_interval_in_seconds: 1
       use_batch_size_multiplier: true
 
       # Monitor
       cpu_soft_threshold: 40  # Soft threshold for CPU usage. If the CPU usage exceeds this value, thread count will be decreased into half.
       cpu_hard_threshold: 60  # Hard threshold for CPU usage. If the CPU usage exceeds this value, thread count will be decreased to 0.
-      latency_soft_threshold: 30  # Soft threshold for WriteLatency. If the latency exceeds this value, batch size will be decreased into half.
-      latency_hard_threshold: 50  # Hard threshold for WriteLatency. If the latency exceeds this value, batch size will be decreased to 0.
+      write_latency_soft_threshold: 30  # Soft threshold for WriteLatency. If the latency exceeds this value, batch size will be decreased into half.
+      write_latency_hard_threshold: 50  # Hard threshold for WriteLatency. If the latency exceeds this value, batch size will be decreased to 0.
 
       # EventHandler
-      event_handler_thread_count: 4  # Number of threads for EventHandler. Max number of binlog files to read at once. (Max 4 recommended)
-      event_handler_thread_timeout: 300  # Timeout for EventHandler thread. If the thread is not finished within this time, it raises exception and restarts EventHandler.
+      eventhandler_thread_count: 4  # Number of threads for EventHandler. Max number of binlog files to read at once. (Max 4 recommended)
+      eventhandler_thread_timeout_in_seconds: 300  # Timeout for EventHandler thread. If the thread is not finished within this time, it raises exception and restarts EventHandler.
 
       # EventLoader
       pk_set_max_size: 1000000  # Max number of DML PKs to load from DB at once. No more than 2 * pk_set_max_size will be kept in Redis. This is used for memory optimization.
-      event_batch_duration: 3600  # Timestamp range of DML events to load from DB at once (seconds).
+      event_batch_duration_in_seconds: 3600  # Timestamp range of DML events to load from DB at once (seconds).
 
       # Validator
       bulk_import_validation_batch_size: 1000000  # Batch size for bulk import validation
       apply_dml_events_validation_batch_size: 3000  # Batch size for DML event validation
-      full_dml_event_validation_interval: 1  # Interval for full DML event validation (hours)
+      apply_dml_events_validation_interval_in_seconds: 10 # Interval for DML event validation (seconds)
+      full_dml_event_validation_interval_in_hours: 1  # Interval for full DML event validation (hours)
       validation_thread_count: 4  # Number of threads to use for validation process
 
   instances:
