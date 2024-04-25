@@ -157,7 +157,7 @@ class Controller(SBOSCComponent):
             while not self.is_preferred_window():
                 if self.stop_flag:
                     return
-                self.logger.info("Waiting for least busy hour")
+                self.logger.info("Waiting for preferred window")
                 time.sleep(300)
             self.slack.send_message("Start validating bulk import")
             try:
@@ -170,7 +170,6 @@ class Controller(SBOSCComponent):
                     self.slack.send_message(message="Bulk import validation succeeded", color="good")
             except StopFlagSet:
                 return
-
 
     def apply_dml_events_validation(self):
         self.interval = 10
@@ -187,7 +186,7 @@ class Controller(SBOSCComponent):
                 self.logger.info("Finished ANALYZE TABLE on destination table")
 
                 if not self.is_preferred_window():
-                    self.logger.info("Waiting for least busy hour")
+                    self.logger.info("Waiting for preferred window")
                     time.sleep(300)
                     return
                 if not config.AUTO_SWAP:
