@@ -9,13 +9,12 @@ It also provides seamless pausing and resuming of tasks to adeptly handle extend
 changes, along with a built-in monitoring system to dynamically control its heavy DML load based on Aurora's performance
 metrics.
 
-SB-OSC is designed to overcome the limitations that traditional migration tools face with large-scale tables,
+SB-OSC is designed to overcome the limitations that existing migration tools face with large-scale tables,
 significantly reducing the operational overhead associated with managing large tables.
 
 ## Takeaways
 
-SB-OSC has its own unique features that differentiate it from traditional schema migration tools such
-as `pt-osc` and `gh-ost`.
+SB-OSC has its own unique features that differentiate it from existing schema migration tools such as `pt-osc` and `gh-ost`.
 
 ### Multithreading
 
@@ -37,6 +36,8 @@ allows users to customize queries for specific tables such as data retention, ta
 
 Also, it provides operation class that allows replication cross different Aurora clusters which can be used in various
 scenarios such as cross-region replication, cross-account replication, clone cluster replication, etc.
+
+[Guide for operation class](doc/operation-class.md)
 
 ### Data Validation
 
@@ -89,7 +90,7 @@ performance testing:
 |      G      |                   1211 |              60.7 K |
 
 **Avg Row Length**: `avg_row_length` from `information_schema.TABLES`  
-**Write IOPS**: Average increase of `count_star` from `performance_schema.table_io_waits_summary_by_table` per
+**Write IOPS**: Average increase of `count_write` from `performance_schema.table_io_waits_summary_by_table` per
 minute.
 
 All tables were in the same Aurora MySQL v3 cluster
