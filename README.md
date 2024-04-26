@@ -26,7 +26,9 @@ For binlog event processing, SB-OSC processes binlog files in parallel, which en
 heavy write loads.
 
 ### Resumable
-SB-OSC is resumable at any stage of the schema migration process. It saves the current state of each stage to database and Redis, allowing users to pause and resume the process at any time, as log as binlog retention is sufficient.
+
+SB-OSC is resumable at any stage of the schema migration process. It saves the current state of each stage to database
+and Redis, allowing users to pause and resume the process at any time, as log as binlog retention is sufficient.
 
 ### Operation Class
 
@@ -63,7 +65,9 @@ It requires the following resources to run:
 - AWS SecretsManager secret
 - IAM role
 
-SB-OSC accepts `ROW` for binlog format. It is recommended to set `binlog-ignore-db` to `sbosc` to prevent SB-OSC from processing its own binlog events.
+SB-OSC accepts `ROW` for binlog format. It is recommended to set `binlog-ignore-db` to `sbosc` to prevent SB-OSC from
+processing its own binlog events.
+
 - `binlog_format` set to `ROW`
 - `binlog-ignore-db` set to `sbosc` (Recommended)
 
@@ -105,9 +109,11 @@ Result shows that SB-OSC can catch up DML events on tables with very high write 
 
 ### Bulk Import
 
-To provide general insight on bulk import performance, the test was conducted on table `A` with no secondary indexes, and no additional traffic.
+To provide general insight on bulk import performance, the test was conducted on table `A` with no secondary indexes,
+and no additional traffic.
 
-Actual performance of bulk import can vary depending on the number of secondary indexes, the number of rows, column types,
+Actual performance of bulk import can vary depending on the number of secondary indexes, the number of rows, column
+types,
 production traffic, etc.
 
 Following are the results of bulk import performance based on instance sizes:
@@ -119,6 +125,34 @@ Following are the results of bulk import performance based on instance sizes:
 |  r6g.8xlarge  |                158 K |                       72.2 K |                       1.39 G |                44.6 |
 
 Insert rate, network throughput, and storage throughput are the average values calculated from CloudWatch metrics.
+
+### Comparison with gh-ost
+
+We've compared total migration time of SB-OSC and gh-ost on following conditions:
+
+- Table `C` with ~200M rows
+- Aurora MySQL v3 cluster, r6g.8xlarge instance
+- 2 secondary indexes
+- `batch_size` (`chunk-size` for gh-ost): 50000
+- (gh-ost) `--allow-on-master`
+
+**w/o traffic**
+
+|  Tool  | Total Migration Time | CPU Utilization (%) |
+|:------:|---------------------:|--------------------:|
+| SB-OSC |                  22m |                60.6 |
+| gh-ost |               1h 52m |                19.7 |
+
+**w/ traffic**
+
+Traffic was generated only to table `C` during the migration. (~1.0K inserts/s, ~0.33K updates/s, ~0.33K deletes/s)
+
+|  Tool  | Total Migration Time | CPU Utilization (%) |
+|:------:|---------------------:|--------------------:|
+| SB-OSC |                  27m |                62.7 |
+| gh-ost |                  1d+ |                27.4 |
+
+For gh-ost, we interrupted the migration at 50% (~12h) since ETA kept increasing.
 
 ## Limitations
 
