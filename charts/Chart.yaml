@@ -1,0 +1,8 @@
+apiVersion: v2
+name: sb-osc
+version: 0.0.1
+
+dependencies:
+  - name: external-secrets
+    version: "0.8.2"
+    repository: "https://charts.external-secrets.io/"

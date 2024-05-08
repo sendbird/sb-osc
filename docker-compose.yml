@@ -1,0 +1,20 @@
+version: '3.5'
+
+services:
+  mysql:
+    image: "mysql:8.0.34"
+    container_name: mysql
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./tests/configs/my.cnf:/etc/mysql/conf.d/my.cnf
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_DATABASE: "sbosc"
+
+  redis:
+    image: redis:7.0.4
+    container_name: redis
+    ports:
+      - "6379:6379"

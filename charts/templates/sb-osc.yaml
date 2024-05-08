@@ -1,0 +1,97 @@
+{{- $enabled := .Values.sbosc.enabled }}
+{{- $defaultImage := .Values.sbosc.default.image }}
+{{- $defualtWorkers := .Values.sbosc.default.workers }}
+{{- $defaultResources := deepCopy .Values.sbosc.default.resources }}
+{{- $defaultConfig := deepCopy .Values.sbosc.default.config }}
+
+{{- range .Values.sbosc.instances }}
+{{- $instanceEnabled := ternary .enabled $enabled (hasKey . "enabled")}}
+{{- if (and $instanceEnabled $enabled) }}
+{{- $config := deepCopy $defaultConfig | merge .config }}
+{{- $resources := (hasKey . "resources") | ternary .resources dict }}
+{{- $resources = deepCopy $defaultResources | merge $resources }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sb-osc-config-{{ .name }}
+  labels:
+    app: sb-osc
+    name: {{ .name }}
+data:
+  config.yaml: |
+    {{- $config | toYaml | nindent 4}}
+
+{{- $name := .name }}
+{{- $image := .image | default $defaultImage }}
+{{- $workers := ternary .workers $defualtWorkers (hasKey . "workers") }}
+{{- $configVersion := $config | toYaml | sha256sum }}
+{{- range $component := list "controller" "eventhandler" "monitor" "worker" }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sb-osc-{{ $component }}-{{ $name }}
+  labels:
+    app: sb-osc
+    name: {{ $name }}
+spec:
+  serviceName: sb-osc-{{ $component }}
+  replicas: {{ ternary $workers 1 (eq $component "worker") }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: sb-osc
+      component: {{ $component }}
+      name: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app: sb-osc
+        component: {{ $component }}
+        name: {{ $name }}
+      annotations:
+        config-version: {{ $configVersion }}
+    spec:
+      serviceAccountName: sb-osc-access
+      containers:
+      - name: {{ $component }}
+        image: {{ $image }}
+        imagePullPolicy: Always
+        command:
+          - "python"
+          - "-m"
+          - "sbosc.{{ $component }}.main"
+        volumeMounts:
+          - name: sb-osc-secret
+            mountPath: {{ $.Values.secretFile }}
+            subPath: secret.json
+            readOnly: true
+          - name: sb-osc-config
+            mountPath: {{ $.Values.configFile }}
+            subPath: config.yaml
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: AWS_REGION
+            value: {{ $.Values.awsRegion }}
+          - name: CONFIG_FILE
+            value: {{ $.Values.configFile }}
+          - name: SECRET_FILE
+            value: {{ $.Values.secretFile }}
+        resources:
+          {{- index $resources $component | toYaml | nindent 10 }}
+      volumes:
+        - name: sb-osc-config
+          configMap:
+            name: sb-osc-config-{{ $name }}
+        - name: sb-osc-secret
+          secret:
+            secretName: sb-osc-secret
+
+      terminationGracePeriodSeconds: 300
+{{- end }}
+{{- end }}
+{{- end }}

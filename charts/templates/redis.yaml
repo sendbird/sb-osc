@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sb-osc-redis
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: redis
+  serviceName: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: sb-osc-redis
+          image: redis:7.0.2
+          command:
+            - redis-server
+            - /usr/local/etc/redis/redis.conf
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: "500m"
+              {{- if hasKey .Values.redis "memory" }}
+              memory: {{ .Values.redis.memory }}
+              {{- else }}
+              memory: "1000Mi"
+              {{- end }}
+          volumeMounts:
+            - mountPath: /data
+              name: redis-data
+            - mountPath: /usr/local/etc/redis/redis.conf
+              name: redis-secret
+              subPath: redis.conf
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-pvc
+        - name: redis-config
+          configMap:
+            name: redis-config
+        - name: redis-secret
+          secret:
+            secretName: sb-osc-secret
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: redis-sc
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: redis-sc
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  type: gp3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: redis
+

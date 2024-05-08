@@ -1,0 +1,12 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sb-osc
+  description: Application for online schema change
+  annotations:
+    github.com/project-slug: sendbird/sb-osc
+spec:
+  type: service
+  lifecycle: production
+  owner: team-data-infrastructure
+  system: sendbird-internal-tools

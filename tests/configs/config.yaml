@@ -1,0 +1,47 @@
+source_writer_endpoint: "127.0.0.1"
+source_reader_endpoint: "127.0.0.1"
+source_cluster_id: "test"
+source_db: "sbosc"
+source_table: "source_table"
+destination_cluster_id: "test"
+destination_db: "sbosc"
+destination_table: "destination_table"
+min_chunk_size: 1000
+max_chunk_count: 10
+auto_swap: False
+preferred_window: "00:00-23:59"
+skip_bulk_import: False
+operation_class: BaseOperation
+indexes: []
+index_created_per_query: 4
+
+# Worker config
+min_batch_size: 100
+batch_size_step_size: 100
+max_batch_size: 10000
+min_thread_count: 4
+thread_count_step_size: 4
+max_thread_count: 8
+commit_interval: 0.01
+optimal_value_use_limit: 10
+use_batch_size_multiplier: False
+
+# EventHandler config
+event_handler_thread_count: 4
+event_handler_thread_timeout: 300
+
+# Threshold
+cpu_soft_threshold: 70
+cpu_hard_threshold: 90
+latency_soft_threshold: 20
+latency_hard_threshold: 50
+
+# Validation
+bulk_import_validation_batch_size: 1000
+apply_dml_events_validation_batch_size: 1000
+validation_thread_count: 10
+full_dml_event_validation_interval: 1
+
+# DML event loading
+pk_set_max_size: 10000
+event_batch_duration: 1
