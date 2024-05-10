@@ -274,17 +274,17 @@ class MetricMonitor(SBOSCComponent):
         # last_event_timestamp, last_loaded_timestamp, last_catchup_timestamp
         with self.db.cursor() as cursor:
             cursor: Cursor
-            cursor.execute('''
+            cursor.execute(f'''
                 SELECT MIN(last_event_timestamp), MAX(last_event_timestamp)
-                FROM sbosc.event_handler_status WHERE migration_id = %s AND last_event_timestamp > 1
+                FROM {config.SBOSC_DB}.event_handler_status WHERE migration_id = %s AND last_event_timestamp > 1
             ''' % self.migration_id)
             start_timestamp, last_timestamp = cursor.fetchone()
             if start_timestamp:
                 last_event_timestamp = last_timestamp - start_timestamp
                 self.metric_sender.submit('sb_osc_last_event_timestamp', last_event_timestamp)
 
-                cursor.execute('''
-                    SELECT last_loaded_timestamp FROM sbosc.apply_dml_events_status
+                cursor.execute(f'''
+                    SELECT last_loaded_timestamp FROM {config.SBOSC_DB}.apply_dml_events_status
                     WHERE migration_id = %s ORDER BY id DESC LIMIT 1
                 ''' % self.migration_id)
                 if cursor.rowcount > 0:
@@ -316,8 +316,8 @@ class MetricMonitor(SBOSCComponent):
         remaining_binlog_size = 0
         if time.time() - self.redis_data.last_catchup_timestamp > 2:
             with self.db.cursor() as cursor:
-                cursor.execute('''
-                    SELECT log_file, log_pos FROM sbosc.event_handler_status
+                cursor.execute(f'''
+                    SELECT log_file, log_pos FROM {config.SBOSC_DB}.event_handler_status
                     WHERE migration_id = %s ORDER BY id DESC LIMIT 1
                 ''' % self.migration_id)
                 if cursor.rowcount > 0:
@@ -338,6 +338,7 @@ class MetricMonitor(SBOSCComponent):
 
         # unmatched_pks
         with self.db.cursor() as cursor:
-            cursor.execute("SELECT COUNT(1) FROM sbosc.unmatched_rows WHERE migration_id = %s" % self.migration_id)
+            cursor.execute(
+                f"SELECT COUNT(1) FROM {config.SBOSC_DB}.unmatched_rows WHERE migration_id = %s" % self.migration_id)
             unmatched_pks = cursor.fetchone()[0]
             self.metric_sender.submit('sb_osc_unmatched_rows', unmatched_pks)

@@ -104,8 +104,8 @@ class Controller(SBOSCComponent):
         # Save chunk info to database
         with self.db.cursor() as cursor:
             cursor: Cursor
-            cursor.executemany('''
-                INSERT INTO sbosc.chunk_info (migration_id, chunk_id, start_pk, end_pk, created_at)
+            cursor.executemany(f'''
+                INSERT INTO {config.SBOSC_DB}.chunk_info (migration_id, chunk_id, start_pk, end_pk, created_at)
                 VALUES (%s, %s, %s, %s, NOW())
             ''', chunks)
 
@@ -128,8 +128,8 @@ class Controller(SBOSCComponent):
         self.logger.info("Restoring missing chunks from database")
         with self.db.cursor() as cursor:
             cursor: Cursor
-            cursor.execute('''
-                SELECT chunk_id FROM sbosc.chunk_info
+            cursor.execute(f'''
+                SELECT chunk_id FROM {config.SBOSC_DB}.chunk_info
                 WHERE migration_id = %s
             ''', [self.migration_id])
             for chunk_id, in cursor.fetchall():
@@ -214,8 +214,8 @@ class Controller(SBOSCComponent):
                 cursor: Cursor
 
                 index_info = None
-                cursor.execute('''
-                    SELECT index_name FROM sbosc.index_creation_status
+                cursor.execute(f'''
+                    SELECT index_name FROM {config.SBOSC_DB}.index_creation_status
                     WHERE migration_id = %s AND ended_at IS NULL AND started_at IS NOT NULL
                 ''', (self.migration_id,))
 
@@ -240,7 +240,7 @@ class Controller(SBOSCComponent):
 
                 else:
                     cursor.execute(f'''
-                        SELECT index_name, index_columns, is_unique FROM sbosc.index_creation_status
+                        SELECT index_name, index_columns, is_unique FROM {config.SBOSC_DB}.index_creation_status
                         WHERE migration_id = %s AND ended_at IS NULL LIMIT {config.INDEX_CREATED_PER_QUERY}
                     ''', (self.migration_id,))
 
@@ -259,8 +259,8 @@ class Controller(SBOSCComponent):
                 started_at = datetime.now()
                 with self.db.cursor() as cursor:
                     cursor: Cursor
-                    cursor.executemany('''
-                       UPDATE sbosc.index_creation_status SET started_at = %s
+                    cursor.executemany(f'''
+                       UPDATE {config.SBOSC_DB}.index_creation_status SET started_at = %s
                        WHERE migration_id = %s AND index_name = %s
                    ''', [(started_at, self.migration_id, index_name) for index_name in index_names])
 
@@ -282,8 +282,8 @@ class Controller(SBOSCComponent):
                 ended_at = datetime.now()
                 with self.db.cursor() as cursor:
                     cursor: Cursor
-                    cursor.executemany('''
-                        UPDATE sbosc.index_creation_status SET ended_at = %s
+                    cursor.executemany(f'''
+                        UPDATE {config.SBOSC_DB}.index_creation_status SET ended_at = %s
                         WHERE migration_id = %s AND index_name = %s
                     ''', [(ended_at, self.migration_id, index_name) for index_name in index_names])
 
@@ -362,8 +362,9 @@ class Controller(SBOSCComponent):
             else:
                 cursor.execute(f"RENAME TABLE {destination_table} TO {source_table}")
                 self.redis_data.set_current_stage(Stage.DONE)
-                cursor.execute('''
-                    UPDATE sbosc.migration_plan SET ended_at = FROM_UNIXTIME(%s), final_max_id = %s WHERE id = %s
+                cursor.execute(f'''
+                    UPDATE {config.SBOSC_DB}.migration_plan
+                    SET ended_at = FROM_UNIXTIME(%s), final_max_id = %s WHERE id = %s
                 ''', (after_rename_table_timestamp, final_max_id, self.migration_id))
                 self.logger.info("Tables swapped")
                 self.slack.send_message("Tables swapped", color="good")

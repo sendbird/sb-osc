@@ -41,6 +41,7 @@ class IndexConfig:
 
 class Config:
     # Migration plan
+    SBOSC_DB = 'sbosc'
     SOURCE_WRITER_ENDPOINT = ''
     SOURCE_READER_ENDPOINT = ''
     SOURCE_CLUSTER_ID = None  # optional

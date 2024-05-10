@@ -47,7 +47,6 @@ def cursor(config, secret):
         port=secret.PORT,
         user=secret.USERNAME,
         password=secret.PASSWORD,
-        db=config.SOURCE_DB,
         autocommit=True
     )
     with connection.cursor() as cursor:
@@ -56,7 +55,7 @@ def cursor(config, secret):
 
 @pytest.fixture
 def sqlalchemy_engine(config, secret):
-    return create_engine(f'mysql+mysqldb://{secret.USERNAME}:@{config.SOURCE_WRITER_ENDPOINT}:{secret.PORT}/sbosc')
+    return create_engine(f'mysql+mysqldb://{secret.USERNAME}:@{config.SOURCE_WRITER_ENDPOINT}:{secret.PORT}/{config.SOURCE_DB}')
 
 
 @pytest.fixture(autouse=True)
@@ -80,15 +79,13 @@ def init_migration(config, cursor, redis_data):
     from sbosc.const import Stage
     from sbosc.controller.initializer import Initializer
 
-    cursor.execute(f'''
-        SELECT table_name FROM information_schema.tables
-        WHERE table_schema = '{config.SOURCE_DB}'
-    ''')
-    for table, in cursor.fetchall():
-        cursor.execute(f'DROP TABLE {table}')
+    for db in [config.SOURCE_DB, config.DESTINATION_DB, config.SBOSC_DB]:
+        cursor.execute(f'DROP DATABASE IF EXISTS {db}')
+        cursor.execute(f'CREATE DATABASE {db}')
 
-    for table in [config.SOURCE_TABLE, config.DESTINATION_TABLE]:
-        cursor.execute(f"CREATE TABLE {table} (id int)")
+    cursor.execute(f'CREATE TABLE {config.SOURCE_DB}.{config.SOURCE_TABLE} (id int)')
+    cursor.execute(f'CREATE TABLE {config.DESTINATION_DB}.{config.DESTINATION_TABLE} (id int)')
+
     migration_id = Initializer().init_migration()
 
     # Validate Initializer.init_migration

@@ -40,14 +40,14 @@ def setup_table(sqlalchemy_engine, cursor, request):
     else:
         dest_df = pd.DataFrame(columns=SOURCE_COLUMNS)
 
-    source_df.to_sql(config.SOURCE_TABLE, sqlalchemy_engine, if_exists='replace', index=False)
-    dest_df.to_sql(config.DESTINATION_TABLE, sqlalchemy_engine, if_exists='replace', index=False)
+    source_df.to_sql(config.SOURCE_TABLE, sqlalchemy_engine, if_exists='replace', index=False, schema=config.SOURCE_DB)
+    dest_df.to_sql(config.DESTINATION_TABLE, sqlalchemy_engine, if_exists='replace', index=False, schema=config.DESTINATION_DB)
 
     if "sparse" in param:
-        cursor.execute(f'alter table {config.SOURCE_TABLE} modify column id int primary KEY AUTO_INCREMENT;')
+        cursor.execute(f'alter table {config.SOURCE_DB}.{config.SOURCE_TABLE} modify column id int primary KEY AUTO_INCREMENT;')
     else:
-        cursor.execute(f'alter table {config.SOURCE_TABLE} add column id int primary KEY AUTO_INCREMENT;')
-    cursor.execute(f'alter table {config.DESTINATION_TABLE} add column id int primary KEY AUTO_INCREMENT;')
+        cursor.execute(f'alter table {config.SOURCE_DB}.{config.SOURCE_TABLE} add column id int primary KEY AUTO_INCREMENT;')
+    cursor.execute(f'alter table {config.DESTINATION_DB}.{config.DESTINATION_TABLE} add column id int primary KEY AUTO_INCREMENT;')
 
 
 @pytest.fixture(autouse=True)
@@ -77,7 +77,7 @@ def worker_manager():
 # Test #
 ########
 def test_setup_table(cursor, setup_table):
-    cursor.execute(f"SELECT * FROM {config.SOURCE_TABLE} LIMIT 1")
+    cursor.execute(f"SELECT * FROM {config.SOURCE_DB}.{config.SOURCE_TABLE} LIMIT 1")
     result = cursor.fetchall()
     assert result[0][0] in TEST_TABLE_VALUES
 
@@ -161,10 +161,10 @@ def test_bulk_import(setup_table, cursor, worker_manager, request_id, redis_data
         })
 
     # Check tables
-    cursor.execute(f"SELECT COUNT(1) FROM {config.SOURCE_TABLE}")
+    cursor.execute(f"SELECT COUNT(1) FROM {config.SOURCE_DB}.{config.SOURCE_TABLE}")
     assert cursor.fetchone()[0] == TABLE_SIZE
 
-    cursor.execute(f"SELECT MAX(id) FROM {config.DESTINATION_TABLE}")
+    cursor.execute(f"SELECT MAX(id) FROM {config.DESTINATION_DB}.{config.DESTINATION_TABLE}")
     if "duplicate_key" in request_id:
         assert cursor.fetchone()[0] == TABLE_SIZE // 20
     else:
@@ -198,7 +198,7 @@ def test_bulk_import(setup_table, cursor, worker_manager, request_id, redis_data
     t2 = time.time()
     print(f"Execution time: {t2 - t1}")
 
-    cursor.execute(f"SELECT COUNT(1) FROM {config.DESTINATION_TABLE}")
+    cursor.execute(f"SELECT COUNT(1) FROM {config.DESTINATION_DB}.{config.DESTINATION_TABLE}")
     assert cursor.fetchone()[0] == TABLE_SIZE
 
     # test worker metrics
@@ -232,7 +232,7 @@ def test_apply_dml_events(setup_table, worker_manager, cursor, redis_data, overr
     # update rows
     modified_column = SOURCE_COLUMNS[0]
     cursor.execute(f'''
-        UPDATE {config.SOURCE_TABLE} SET {modified_column} = 'x' WHERE id IN ({','.join(str(pk) for pk in updated_pks)})
+        UPDATE {config.SOURCE_DB}.{config.SOURCE_TABLE} SET {modified_column} = 'x' WHERE id IN ({','.join(str(pk) for pk in updated_pks)})
     ''')
     redis_data.set_current_stage(Stage.APPLY_DML_EVENTS)
 
@@ -242,13 +242,13 @@ def test_apply_dml_events(setup_table, worker_manager, cursor, redis_data, overr
 
     # check updated rows
     cursor.execute(f'''
-        SELECT count(*) FROM {config.DESTINATION_TABLE} WHERE {modified_column} = 'x'
+        SELECT count(*) FROM {config.DESTINATION_DB}.{config.DESTINATION_TABLE} WHERE {modified_column} = 'x'
     ''')
     assert cursor.fetchone()[0] == len(updated_pks)
 
     # check removed rows
     cursor.execute(f'''
-        SELECT count(*) FROM {config.DESTINATION_TABLE} WHERE id IN ({','.join(str(pk) for pk in removed_pks)})
+        SELECT count(*) FROM {config.DESTINATION_DB}.{config.DESTINATION_TABLE} WHERE id IN ({','.join(str(pk) for pk in removed_pks)})
     ''')
     assert cursor.fetchone()[0] == 0
 
@@ -262,11 +262,11 @@ def test_swap_tables(setup_table, worker_manager, cursor, redis_data, request_id
     redis_data.worker_config.thread_count = 1
 
     def insert_and_check(source_table):
-        cursor.execute(f"INSERT INTO {source_table} (A, B, C) VALUES (1, 2, 3)")
+        cursor.execute(f"INSERT INTO {config.SOURCE_DB}.{source_table} (A, B, C) VALUES (1, 2, 3)")
         last_inserted_id = cursor.lastrowid
         redis_data.updated_pk_set.add([last_inserted_id])
         for _ in range(10):
-            cursor.execute(f"SELECT * FROM {config.DESTINATION_TABLE} WHERE id = {last_inserted_id}")
+            cursor.execute(f"SELECT * FROM {config.DESTINATION_DB}.{config.DESTINATION_TABLE} WHERE id = {last_inserted_id}")
             if cursor.rowcount > 0:
                 break
             time.sleep(100)
@@ -274,13 +274,13 @@ def test_swap_tables(setup_table, worker_manager, cursor, redis_data, request_id
 
     # swap table stage
     old_source_table = f"_{config.SOURCE_TABLE}_old"
-    cursor.execute(f"RENAME TABLE {config.SOURCE_TABLE} TO {old_source_table}")
+    cursor.execute(f"RENAME TABLE {config.SOURCE_DB}.{config.SOURCE_TABLE} TO {config.SOURCE_DB}.{old_source_table}")
     redis_data.set_old_source_table(old_source_table)
     redis_data.set_current_stage(Stage.SWAP_TABLES)
 
     insert_and_check(old_source_table)
 
-    cursor.execute(f"RENAME TABLE {old_source_table} TO {config.SOURCE_TABLE}")
+    cursor.execute(f"RENAME TABLE {config.SOURCE_DB}.{old_source_table} TO {config.SOURCE_DB}.{config.SOURCE_TABLE}")
     redis_data.set_old_source_table(None)
 
     time.sleep(100)

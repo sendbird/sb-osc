@@ -4,6 +4,7 @@ from typing import Literal
 
 from MySQLdb.cursors import Cursor
 
+from config import config
 from modules.db import Database
 from modules.redis import RedisData
 
@@ -54,7 +55,7 @@ class MigrationOperation:
             'update': f'updated_pk_{self.migration_id}'
         }
         cursor.execute(f'''
-            SELECT source_pk FROM sbosc.{table_names[event_type]}
+            SELECT source_pk FROM {config.SBOSC_DB}.{table_names[event_type]}
             WHERE event_timestamp BETWEEN {start_timestamp} AND {end_timestamp}
         ''')
         return ','.join([str(row[0]) for row in cursor.fetchall()])

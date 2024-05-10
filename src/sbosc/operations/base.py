@@ -1,6 +1,7 @@
 import pandas as pd
 from MySQLdb.cursors import Cursor
 
+from config import config
 from sbosc.operations.operation import MigrationOperation
 import sbosc.operations.utils as operation_utils
 
@@ -113,7 +114,7 @@ class BaseOperation(MigrationOperation):
         with db.cursor() as cursor:
             cursor: Cursor
             cursor.execute(f'''
-                SELECT source_pk FROM sbosc.unmatched_rows WHERE source_pk NOT IN (
+                SELECT source_pk FROM {config.SBOSC_DB}.unmatched_rows WHERE source_pk NOT IN (
                     SELECT id FROM {self.destination_db}.{self.destination_table}
                     WHERE id IN ({not_removed_pks_str})
                 ) AND source_pk IN ({not_removed_pks_str})
@@ -266,7 +267,7 @@ class CrossClusterBaseOperation(MigrationOperation):
         with db.cursor(host='source', role='reader') as cursor:
             cursor: Cursor
             query = f'''
-                SELECT source_pk FROM sbosc.unmatched_rows
+                SELECT source_pk FROM {config.SBOSC_DB}.unmatched_rows
                 WHERE source_pk IN ({not_removed_pks_str})
             '''
             if still_not_removed_pks_str:

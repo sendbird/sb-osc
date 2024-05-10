@@ -57,7 +57,7 @@ class EventLoader:
 
             # Get last loaded event timestamp
             cursor.execute(f'''
-                SELECT last_loaded_timestamp FROM sbosc.apply_dml_events_status
+                SELECT last_loaded_timestamp FROM {config.SBOSC_DB}.apply_dml_events_status
                 WHERE migration_id = {self.migration_id} ORDER BY id DESC LIMIT 1
             ''')
             if cursor.rowcount > 0:
@@ -65,9 +65,12 @@ class EventLoader:
             else:
                 cursor.execute(f'''
                     SELECT MIN(event_timestamps.min_ts) FROM (
-                        SELECT MIN(event_timestamp) AS min_ts FROM sbosc.inserted_pk_{self.migration_id} UNION
-                        SELECT MIN(event_timestamp) AS min_ts FROM sbosc.updated_pk_{self.migration_id} UNION
-                        SELECT MIN(event_timestamp) AS min_ts FROM sbosc.deleted_pk_{self.migration_id}
+                        SELECT MIN(event_timestamp) AS min_ts
+                        FROM {config.SBOSC_DB}.inserted_pk_{self.migration_id} UNION
+                        SELECT MIN(event_timestamp) AS min_ts
+                        FROM {config.SBOSC_DB}.updated_pk_{self.migration_id} UNION
+                        SELECT MIN(event_timestamp) AS min_ts
+                        FROM {config.SBOSC_DB}.deleted_pk_{self.migration_id}
                     ) AS event_timestamps;
                 ''')
                 if cursor.rowcount > 0:
@@ -82,9 +85,9 @@ class EventLoader:
 
             cursor.execute(f'''
                 SELECT MAX(event_timestamps.max_ts) FROM (
-                    SELECT MAX(event_timestamp) AS max_ts FROM sbosc.inserted_pk_{self.migration_id} UNION
-                    SELECT MAX(event_timestamp) AS max_ts FROM sbosc.updated_pk_{self.migration_id} UNION
-                    SELECT MAX(event_timestamp) AS max_ts FROM sbosc.deleted_pk_{self.migration_id}
+                    SELECT MAX(event_timestamp) AS max_ts FROM {config.SBOSC_DB}.inserted_pk_{self.migration_id} UNION
+                    SELECT MAX(event_timestamp) AS max_ts FROM {config.SBOSC_DB}.updated_pk_{self.migration_id} UNION
+                    SELECT MAX(event_timestamp) AS max_ts FROM {config.SBOSC_DB}.deleted_pk_{self.migration_id}
                 ) AS event_timestamps;
             ''')
             if cursor.rowcount > 0:
@@ -100,17 +103,17 @@ class EventLoader:
 
             while not found_end_timestamp and self.batch_duration > 0 and not self.stop_flag:
                 cursor.execute(f'''
-                    SELECT COUNT(1) FROM sbosc.inserted_pk_{self.migration_id}
+                    SELECT COUNT(1) FROM {config.SBOSC_DB}.inserted_pk_{self.migration_id}
                     WHERE event_timestamp BETWEEN {start_timestamp} AND {start_timestamp + self.batch_duration}
                 ''')
                 inserted_count = cursor.fetchone()[0]
                 cursor.execute(f'''
-                    SELECT COUNT(1) FROM sbosc.updated_pk_{self.migration_id}
+                    SELECT COUNT(1) FROM {config.SBOSC_DB}.updated_pk_{self.migration_id}
                     WHERE event_timestamp BETWEEN {start_timestamp} AND {start_timestamp + self.batch_duration}
                 ''')
                 updated_count = cursor.fetchone()[0]
                 cursor.execute(f'''
-                    SELECT COUNT(1) FROM sbosc.deleted_pk_{self.migration_id}
+                    SELECT COUNT(1) FROM {config.SBOSC_DB}.deleted_pk_{self.migration_id}
                     WHERE event_timestamp BETWEEN {start_timestamp} AND {start_timestamp + self.batch_duration}
                 ''')
                 deleted_count = cursor.fetchone()[0]
@@ -140,10 +143,10 @@ class EventLoader:
             # Updated pks
             cursor.execute(f'''
                 SELECT updated_pks.source_pk, updated_pks.event_timestamp FROM (
-                    SELECT source_pk, event_timestamp FROM sbosc.inserted_pk_{self.migration_id}
+                    SELECT source_pk, event_timestamp FROM {config.SBOSC_DB}.inserted_pk_{self.migration_id}
                     WHERE event_timestamp BETWEEN {start_timestamp} AND {end_timestamp}
                     UNION
-                    SELECT source_pk, event_timestamp FROM sbosc.updated_pk_{self.migration_id}
+                    SELECT source_pk, event_timestamp FROM {config.SBOSC_DB}.updated_pk_{self.migration_id}
                     WHERE event_timestamp BETWEEN {start_timestamp} AND {end_timestamp}
                 ) AS updated_pks
             ''')
@@ -155,7 +158,7 @@ class EventLoader:
 
             # Removed pks
             cursor.execute(f'''
-                SELECT source_pk, event_timestamp FROM sbosc.deleted_pk_{self.migration_id}
+                SELECT source_pk, event_timestamp FROM {config.SBOSC_DB}.deleted_pk_{self.migration_id}
                 WHERE event_timestamp BETWEEN {start_timestamp} AND {end_timestamp}
             ''')
             for source_pk, event_timestamp in cursor.fetchall():
@@ -181,8 +184,8 @@ class EventLoader:
                     # Also it will prevent eventhandler from moving to next stage to early even before loading events
                     with self.db.cursor(role='reader') as cursor:
                         cursor: Cursor
-                        cursor.execute('''
-                            SELECT last_event_timestamp FROM sbosc.event_handler_status
+                        cursor.execute(f'''
+                            SELECT last_event_timestamp FROM {config.SBOSC_DB}.event_handler_status
                             WHERE migration_id = %s ORDER BY id LIMIT 1
                         ''', (self.migration_id,))
                         if cursor.rowcount > 0:
@@ -204,9 +207,9 @@ class EventLoader:
             # Save last loaded event timestamp
             with self.db.cursor() as cursor:
                 cursor: Cursor
-                cursor.execute('''
-                    INSERT INTO sbosc.apply_dml_events_status (migration_id, last_loaded_timestamp, created_at)
-                    VALUES (%s, %s, NOW())
+                cursor.execute(f'''
+                    INSERT INTO {config.SBOSC_DB}.apply_dml_events_status
+                    (migration_id, last_loaded_timestamp, created_at) VALUES (%s, %s, NOW())
                 ''', (self.migration_id, max_timestamp))
                 self.last_loaded_timestamp = max_timestamp
                 self.logger.info(f"Loaded events from database. Last loaded timestamp: {self.last_loaded_timestamp}")

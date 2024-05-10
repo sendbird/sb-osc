@@ -27,13 +27,13 @@ class Initializer:
     def check_database_setup(self):
         with self.db.cursor() as cursor:
             cursor: Cursor
-            cursor.execute("SELECT 1 FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = 'sbosc'")
+            cursor.execute(f"SELECT 1 FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = '{config.SBOSC_DB}'")
             if cursor.rowcount == 0:
                 self.logger.info("SB-OSC database not found")
                 return False
-            cursor.execute('''
+            cursor.execute(f'''
                    SELECT 1 FROM information_schema.TABLES
-                   WHERE TABLE_SCHEMA = 'sbosc' AND TABLE_NAME IN (%s)
+                   WHERE TABLE_SCHEMA = '{config.SBOSC_DB}' AND TABLE_NAME IN (%s)
                ''' % ','.join(['%s'] * len(REQUIRED_TABLES)), REQUIRED_TABLES)
             if cursor.rowcount != len(REQUIRED_TABLES):
                 self.logger.info("Required tables not found")
@@ -43,11 +43,11 @@ class Initializer:
     def setup_database(self):
         with self.db.cursor() as cursor:
             cursor: Cursor
-            cursor.execute("CREATE DATABASE IF NOT EXISTS sbosc;")
+            cursor.execute(f"CREATE DATABASE IF NOT EXISTS {config.SBOSC_DB};")
             self.logger.info("Database created")
 
             # Controller tables
-            cursor.execute("USE sbosc;")
+            cursor.execute(f"USE {config.SBOSC_DB};")
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS migration_plan (
                     id int PRIMARY KEY AUTO_INCREMENT,
@@ -190,8 +190,8 @@ class Initializer:
         with self.db.cursor() as cursor:
             # Insert migration plan
             cursor: Cursor
-            cursor.execute('''
-                INSERT INTO sbosc.migration_plan
+            cursor.execute(f'''
+                INSERT INTO {config.SBOSC_DB}.migration_plan
                 (source_cluster_id, source_db, source_table,
                 destination_cluster_id, destination_db, destination_table, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s, NOW())
@@ -208,8 +208,8 @@ class Initializer:
 
             # Insert index creation status
             for index in config.INDEXES:
-                cursor.execute('''
-                    INSERT INTO sbosc.index_creation_status
+                cursor.execute(f'''
+                    INSERT INTO {config.SBOSC_DB}.index_creation_status
                     (migration_id, index_name, index_columns, is_unique, created_at)
                     VALUES (%s, %s, %s, %s, NOW())
                 ''', (
@@ -223,7 +223,7 @@ class Initializer:
             dml_log_tables = [f'{table}_{migration_id}' for table in ['inserted_pk', 'updated_pk', 'deleted_pk']]
             for table in dml_log_tables:
                 cursor.execute(f'''
-                    CREATE TABLE IF NOT EXISTS sbosc.{table} (
+                    CREATE TABLE IF NOT EXISTS {config.SBOSC_DB}.{table} (
                         source_pk bigint PRIMARY KEY,
                         event_timestamp bigint,
                         KEY `idx_{table}_event_timestamp` (`event_timestamp`)

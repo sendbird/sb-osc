@@ -111,8 +111,8 @@ def test_update_worker_config(monitor, redis_data):
 
 
 def test_check_migration_status(monitor, cursor, redis_data):
-    cursor.execute("TRUNCATE TABLE sbosc.event_handler_status")
-    cursor.execute("TRUNCATE TABLE sbosc.apply_dml_events_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.apply_dml_events_status")
     monitor.redis_data.metadata.max_id = 0
     monitor.check_migration_status()
     metric_set = get_metric_names(monitor)
@@ -131,7 +131,7 @@ def test_check_migration_status(monitor, cursor, redis_data):
     assert metric_set == expected_metrics
 
     cursor.execute(f'''
-        INSERT INTO sbosc.event_handler_status (migration_id, log_file, log_pos, last_event_timestamp, created_at)
+        INSERT INTO {config.SBOSC_DB}.event_handler_status (migration_id, log_file, log_pos, last_event_timestamp, created_at)
         VALUES (1, 'mysql-bin.000001', 4, 2, NOW())
     ''')
     redis_data.set_last_catchup_timestamp(time.time())
@@ -144,7 +144,7 @@ def test_check_migration_status(monitor, cursor, redis_data):
     assert metric_set == expected_metrics
 
     cursor.execute(f'''
-        INSERT INTO sbosc.apply_dml_events_status (migration_id, last_loaded_timestamp, created_at)
+        INSERT INTO {config.SBOSC_DB}.apply_dml_events_status (migration_id, last_loaded_timestamp, created_at)
         VALUES (1, NOW(), NOW())
     ''')
     monitor.check_migration_status()

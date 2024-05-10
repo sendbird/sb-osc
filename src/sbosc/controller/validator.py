@@ -107,7 +107,7 @@ class DataValidator:
 
             # Get last validated event timestamp
             cursor.execute(f'''
-                SELECT last_validated_timestamp FROM sbosc.apply_dml_events_validation_status
+                SELECT last_validated_timestamp FROM {config.SBOSC_DB}.apply_dml_events_validation_status
                 WHERE migration_id = {self.migration_id} ORDER BY id DESC LIMIT 1
             ''')
             if cursor.rowcount > 0:
@@ -115,16 +115,19 @@ class DataValidator:
             else:
                 cursor.execute(f'''
                     SELECT MIN(event_timestamps.min_ts) FROM (
-                        SELECT MIN(event_timestamp) AS min_ts FROM sbosc.inserted_pk_{self.migration_id} UNION
-                        SELECT MIN(event_timestamp) AS min_ts FROM sbosc.updated_pk_{self.migration_id} UNION
-                        SELECT MIN(event_timestamp) AS min_ts FROM sbosc.deleted_pk_{self.migration_id}
+                        SELECT MIN(event_timestamp) AS min_ts
+                        FROM {config.SBOSC_DB}.inserted_pk_{self.migration_id} UNION
+                        SELECT MIN(event_timestamp) AS min_ts
+                        FROM {config.SBOSC_DB}.updated_pk_{self.migration_id} UNION
+                        SELECT MIN(event_timestamp) AS min_ts
+                        FROM {config.SBOSC_DB}.deleted_pk_{self.migration_id}
                     ) AS event_timestamps;
                 ''')
                 if cursor.rowcount > 0:
                     start_timestamp = cursor.fetchone()[0]
 
             cursor.execute(f'''
-                SELECT last_event_timestamp FROM sbosc.event_handler_status
+                SELECT last_event_timestamp FROM {config.SBOSC_DB}.event_handler_status
                 WHERE migration_id = {self.migration_id} ORDER BY id DESC LIMIT 1
             ''')
             if cursor.rowcount > 0:
@@ -148,7 +151,7 @@ class DataValidator:
                 unmatched_pks.extend([(pk, UnmatchType.NOT_UPDATED) for pk in not_updated_pks])
         elif table == 'deleted_pk':
             source_cursor.execute(f'''
-                SELECT source_pk FROM sbosc.deleted_pk_{self.migration_id}
+                SELECT source_pk FROM {config.SBOSC_DB}.deleted_pk_{self.migration_id}
                 WHERE event_timestamp BETWEEN {start_timestamp} AND {end_timestamp}
             ''')
             if source_cursor.rowcount > 0:
@@ -188,7 +191,7 @@ class DataValidator:
                     dest_cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;")
 
                     source_cursor.execute(f'''
-                        SELECT COUNT(1) FROM sbosc.{table}_{self.migration_id}
+                        SELECT COUNT(1) FROM {config.SBOSC_DB}.{table}_{self.migration_id}
                         WHERE event_timestamp BETWEEN {batch_start_timestamp} AND {batch_end_timestamp}
                     ''')
                     event_count = source_cursor.fetchone()[0]
@@ -220,7 +223,7 @@ class DataValidator:
         with self.db.cursor() as cursor:
             cursor: Cursor
             cursor.execute(f'''
-                SELECT source_pk, unmatch_type FROM sbosc.unmatched_rows
+                SELECT source_pk, unmatch_type FROM {config.SBOSC_DB}.unmatched_rows
                 WHERE migration_id = {self.migration_id} LIMIT {self.apply_dml_events_batch_size}
             ''')
             if cursor.rowcount > 0:
@@ -237,7 +240,7 @@ class DataValidator:
                         not_updated_pks = not_updated_pks - matched_pks
                         matched_pks_str = ','.join([str(pk) for pk in matched_pks])
                         cursor.execute(f'''
-                            DELETE FROM sbosc.unmatched_rows WHERE source_pk IN ({matched_pks_str})
+                            DELETE FROM {config.SBOSC_DB}.unmatched_rows WHERE source_pk IN ({matched_pks_str})
                             AND unmatch_type = '{UnmatchType.NOT_UPDATED}'
                         ''')
                 if len(not_removed_pks) > 0:
@@ -246,7 +249,7 @@ class DataValidator:
                         not_removed_pks = not_removed_pks - matched_pks
                         matched_pks_str = ','.join([str(pk) for pk in matched_pks])
                         cursor.execute(f'''
-                            DELETE FROM sbosc.unmatched_rows WHERE source_pk IN ({matched_pks_str})
+                            DELETE FROM {config.SBOSC_DB}.unmatched_rows WHERE source_pk IN ({matched_pks_str})
                             AND unmatch_type = '{UnmatchType.NOT_REMOVED}'
                         ''')
                 self.redis_data.updated_pk_set.add(not_updated_pks - not_removed_pks)
@@ -262,11 +265,11 @@ class DataValidator:
                 self.logger.info(f"Start validating DML events from {start_timestamp} to {end_timestamp}")
                 for table in ['inserted_pk', 'updated_pk', 'deleted_pk']:
                     cursor.execute(f'''
-                        ANALYZE TABLE sbosc.{table}_{self.migration_id}
+                        ANALYZE TABLE {config.SBOSC_DB}.{table}_{self.migration_id}
                     ''')
                     cursor.execute(f'''
                         SELECT TABLE_ROWS FROM information_schema.TABLES
-                        WHERE TABLE_SCHEMA = 'sbosc' AND TABLE_NAME = '{table}_{self.migration_id}'
+                        WHERE TABLE_SCHEMA = '{config.SBOSC_DB}' AND TABLE_NAME = '{table}_{self.migration_id}'
                     ''')
                     table_rows = cursor.fetchone()[0]
 
@@ -289,11 +292,12 @@ class DataValidator:
                                 thread.result()
 
             cursor.executemany(f'''
-                INSERT IGNORE INTO sbosc.unmatched_rows (source_pk, migration_id, unmatch_type)
+                INSERT IGNORE INTO {config.SBOSC_DB}.unmatched_rows (source_pk, migration_id, unmatch_type)
                 VALUES (%s, {self.migration_id}, %s)
             ''', unmatched_pks)
             self.validate_unmatched_pks()
-            cursor.execute(f"SELECT COUNT(1) FROM sbosc.unmatched_rows WHERE migration_id = {self.migration_id}")
+            cursor.execute(
+                f"SELECT COUNT(1) FROM {config.SBOSC_DB}.unmatched_rows WHERE migration_id = {self.migration_id}")
             unmatched_rows = cursor.fetchone()[0]
 
         # Even though validation logic is based on data in tables following valid condition can be achieved.
@@ -316,7 +320,7 @@ class DataValidator:
         with self.db.cursor() as cursor:
             cursor: Cursor
             cursor.execute(f'''
-                INSERT INTO sbosc.apply_dml_events_validation_status
+                INSERT INTO {config.SBOSC_DB}.apply_dml_events_validation_status
                 (migration_id, last_validated_timestamp, is_valid, created_at)
                 VALUES ({self.migration_id}, {end_timestamp}, {is_valid}, NOW())
             ''')
@@ -332,7 +336,7 @@ class DataValidator:
         with self.db.cursor(role='reader') as cursor:
             cursor: Cursor
             cursor.execute(f'''
-                SELECT created_at FROM sbosc.full_dml_event_validation_status
+                SELECT created_at FROM {config.SBOSC_DB}.full_dml_event_validation_status
                 WHERE migration_id = {self.migration_id} ORDER BY id DESC LIMIT 1
             ''')
 
@@ -345,9 +349,9 @@ class DataValidator:
 
             cursor.execute(f'''
                 SELECT MIN(event_timestamps.min_ts) FROM (
-                    SELECT MIN(event_timestamp) AS min_ts FROM sbosc.inserted_pk_{self.migration_id} UNION
-                    SELECT MIN(event_timestamp) AS min_ts FROM sbosc.updated_pk_{self.migration_id} UNION
-                    SELECT MIN(event_timestamp) AS min_ts FROM sbosc.deleted_pk_{self.migration_id}
+                    SELECT MIN(event_timestamp) AS min_ts FROM {config.SBOSC_DB}.inserted_pk_{self.migration_id} UNION
+                    SELECT MIN(event_timestamp) AS min_ts FROM {config.SBOSC_DB}.updated_pk_{self.migration_id} UNION
+                    SELECT MIN(event_timestamp) AS min_ts FROM {config.SBOSC_DB}.deleted_pk_{self.migration_id}
                 ) AS event_timestamps;
             ''')
             if cursor.rowcount > 0:
@@ -357,7 +361,7 @@ class DataValidator:
                     return
 
             cursor.execute(f'''
-                SELECT last_event_timestamp FROM sbosc.event_handler_status
+                SELECT last_event_timestamp FROM {config.SBOSC_DB}.event_handler_status
                 WHERE migration_id = {self.migration_id} ORDER BY id DESC LIMIT 1
             ''')
             if cursor.rowcount > 0:
@@ -370,7 +374,7 @@ class DataValidator:
 
         with self.db.cursor() as cursor:
             cursor.execute(f'''
-                INSERT INTO sbosc.full_dml_event_validation_status
+                INSERT INTO {config.SBOSC_DB}.full_dml_event_validation_status
                 (migration_id, last_validated_timestamp, is_valid, created_at)
                 VALUES ({self.migration_id}, {end_timestamp}, {is_valid}, NOW())
             ''')
