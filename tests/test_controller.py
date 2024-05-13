@@ -24,22 +24,22 @@ TABLE_SIZE = 10000
 @pytest.fixture
 def setup_table(sqlalchemy_engine, cursor, request):
     param = request.param if hasattr(request, 'param') else ''
-    cursor.execute(f"DROP TABLE IF EXISTS {config.SOURCE_TABLE}")
+    cursor.execute(f"DROP TABLE IF EXISTS {config.SOURCE_DB}.{config.SOURCE_TABLE}")
     if param == 'with_data':
         df = pd.DataFrame(np.random.choice(['a', 'b', 'c'], size=(TABLE_SIZE, 3)), columns=['A', 'B', 'C'])
         df['id'] = range(1, 1 + len(df))
-        df.to_sql(config.SOURCE_TABLE, sqlalchemy_engine, if_exists='replace', index=False)
-        df.to_sql(config.DESTINATION_TABLE, sqlalchemy_engine, if_exists='replace', index=False)
-        cursor.execute(f"ALTER TABLE {config.SOURCE_TABLE} MODIFY COLUMN id int AUTO_INCREMENT PRIMARY KEY")
-        cursor.execute(f"ALTER TABLE {config.DESTINATION_TABLE} MODIFY COLUMN id int AUTO_INCREMENT PRIMARY KEY")
+        df.to_sql(config.SOURCE_TABLE, sqlalchemy_engine, if_exists='replace', index=False, schema=config.SOURCE_DB)
+        df.to_sql(config.DESTINATION_TABLE, sqlalchemy_engine, if_exists='replace', index=False, schema=config.DESTINATION_DB)
+        cursor.execute(f"ALTER TABLE {config.SOURCE_DB}.{config.SOURCE_TABLE} MODIFY COLUMN id int AUTO_INCREMENT PRIMARY KEY")
+        cursor.execute(f"ALTER TABLE {config.DESTINATION_DB}.{config.DESTINATION_TABLE} MODIFY COLUMN id int AUTO_INCREMENT PRIMARY KEY")
     else:
         cursor.execute(f'''
-            CREATE TABLE {config.SOURCE_TABLE} (
+            CREATE TABLE {config.SOURCE_DB}.{config.SOURCE_TABLE} (
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 A CHAR(1), B CHAR(1), C CHAR(1)
             )
         ''')
-        cursor.execute(f"INSERT INTO {config.SOURCE_TABLE} (id, A, B, C) VALUES ({TABLE_SIZE}, 'a', 'b', 'c')")
+        cursor.execute(f"INSERT INTO {config.SOURCE_DB}.{config.SOURCE_TABLE} (id, A, B, C) VALUES ({TABLE_SIZE}, 'a', 'b', 'c')")
 
 
 @pytest.fixture
@@ -108,13 +108,13 @@ def test_bulk_import_validation(controller: Controller, setup_table, cursor, ove
     assert controller.validator.bulk_import_validation()
     delete_pks = random.sample(range(1, TABLE_SIZE), 10)
     cursor.execute(f'''
-        DELETE FROM {config.SOURCE_TABLE}
+        DELETE FROM {config.SOURCE_DB}.{config.SOURCE_TABLE}
         WHERE id IN ({','.join([str(i) for i in delete_pks[:5]])})
     ''')
     assert controller.validator.bulk_import_validation()
     controller.validator.stop_flag = False
     cursor.execute(f'''
-        DELETE FROM {config.DESTINATION_TABLE}
+        DELETE FROM {config.DESTINATION_DB}.{config.DESTINATION_TABLE}
         WHERE id IN ({','.join([str(i) for i in delete_pks])})
     ''')
     assert not controller.validator.bulk_import_validation()
@@ -125,7 +125,7 @@ def test_bulk_import_validation(controller: Controller, setup_table, cursor, ove
 @pytest.mark.parametrize('case', ['normal', 'on_restart'])
 def test_add_index(controller: Controller, setup_table, cursor, case):
     cursor.execute(f'''
-        ALTER TABLE {config.DESTINATION_TABLE}
+        ALTER TABLE {config.DESTINATION_DB}.{config.DESTINATION_TABLE}
         MODIFY COLUMN A VARCHAR(128), MODIFY COLUMN B VARCHAR(128), MODIFY COLUMN C VARCHAR(128)
     ''')
 
@@ -138,20 +138,20 @@ def test_add_index(controller: Controller, setup_table, cursor, case):
         IndexConfig('idx_6', 'B,C')
     ]
 
-    cursor.execute("TRUNCATE TABLE index_creation_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.index_creation_status")
     cursor.executemany(f'''
-        INSERT INTO index_creation_status
+        INSERT INTO {config.SBOSC_DB}.index_creation_status
         (migration_id, index_name, index_columns, is_unique)
         VALUES (%s, %s, %s, %s)
     ''', [(1, index.name, index.columns, index.unique) for index in config.INDEXES])
 
     if case == 'on_restart':
-        cursor.execute("UPDATE index_creation_status SET started_at = NOW() WHERE id = 1")
+        cursor.execute(f"UPDATE {config.SBOSC_DB}.index_creation_status SET started_at = NOW() WHERE id = 1")
 
         def delayed_add_index():
             time.sleep(100)
             cursor.execute(f'''
-                ALTER TABLE {config.DESTINATION_TABLE} ADD INDEX idx_1 (A)
+                ALTER TABLE {config.DESTINATION_DB}.{config.DESTINATION_TABLE} ADD INDEX idx_1 (A)
             ''')
 
         threading.Thread(target=delayed_add_index).start()
@@ -177,31 +177,31 @@ def test_apply_dml_events_validation(controller: Controller, setup_table, redis_
     insert_events = [(random.randint(1, TABLE_SIZE), random.randint(*timestamp_range)) for _ in range(500)]
     update_events = [(random.randint(1, TABLE_SIZE), random.randint(*timestamp_range)) for _ in range(500)]
     delete_events = [(random.randint(1, TABLE_SIZE), random.randint(*timestamp_range)) for _ in range(500)]
-    cursor.executemany('''
-        INSERT IGNORE INTO inserted_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
+    cursor.executemany(f'''
+        INSERT IGNORE INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
     ''', insert_events)
-    cursor.executemany('''
-        INSERT IGNORE INTO updated_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
+    cursor.executemany(f'''
+        INSERT IGNORE INTO {config.SBOSC_DB}.updated_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
     ''', update_events)
-    cursor.executemany('''
-        INSERT IGNORE INTO deleted_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
+    cursor.executemany(f'''
+        INSERT IGNORE INTO {config.SBOSC_DB}.deleted_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
     ''', delete_events)
-    cursor.execute("TRUNCATE TABLE event_handler_status")
-    cursor.execute("TRUNCATE TABLE apply_dml_events_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.apply_dml_events_status")
 
     # Event handler status doesn't have any row
     assert not controller.validator.apply_dml_events_validation()
 
     # Insert row to event handler status and validate
     cursor.execute(f'''
-        INSERT INTO event_handler_status (migration_id, log_file, log_pos, last_event_timestamp, created_at)
+        INSERT INTO {config.SBOSC_DB}.event_handler_status (migration_id, log_file, log_pos, last_event_timestamp, created_at)
         VALUES (1, 'mysql-bin.000001', 4, {timestamp_range[1]}, NOW())
     ''')
     controller.validator.apply_dml_events_validation()
 
     # Check if the validation is correct
-    cursor.execute('''
-        SELECT COUNT(1) FROM unmatched_rows WHERE migration_id = 1 AND unmatch_type = 'not_removed'
+    cursor.execute(f'''
+        SELECT COUNT(1) FROM {config.SBOSC_DB}.unmatched_rows WHERE migration_id = 1 AND unmatch_type = 'not_removed'
     ''')
     not_removed_event_count = cursor.fetchone()[0]
 
@@ -211,33 +211,33 @@ def test_apply_dml_events_validation(controller: Controller, setup_table, redis_
 
     # Delete rows from source table and validate
     cursor.execute(f'''
-        DELETE FROM apply_dml_events_validation_status WHERE migration_id = 1
+        DELETE FROM {config.SBOSC_DB}.apply_dml_events_validation_status WHERE migration_id = 1
     ''')
     cursor.execute(f'''
-        DELETE FROM {config.SOURCE_TABLE} WHERE id IN (SELECT source_pk FROM deleted_pk_1)
+        DELETE FROM {config.SOURCE_DB}.{config.SOURCE_TABLE} WHERE id IN (SELECT source_pk FROM {config.SBOSC_DB}.deleted_pk_1)
     ''')
     controller.validator.apply_dml_events_validation()
 
     # Check if the validation is correct
-    cursor.execute('''
-        SELECT COUNT(1) FROM unmatched_rows WHERE migration_id = 1 AND unmatch_type = 'not_removed'
+    cursor.execute(f'''
+        SELECT COUNT(1) FROM {config.SBOSC_DB}.unmatched_rows WHERE migration_id = 1 AND unmatch_type = 'not_removed'
     ''')
     not_removed_event_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(1) FROM deleted_pk_1")
+    cursor.execute(f"SELECT COUNT(1) FROM {config.SBOSC_DB}.deleted_pk_1")
     deleted_pk_count = cursor.fetchone()[0]
     assert not_removed_event_count == deleted_pk_count
 
     # Delete rows from destination table and validate
     cursor.execute(f'''
-        DELETE FROM {config.SOURCE_TABLE}
+        DELETE FROM {config.SOURCE_DB}.{config.SOURCE_TABLE}
         WHERE id IN ({','.join([str(i) for i in [i[0] for i in delete_events]])})
     ''')
     cursor.execute(f'''
-        DELETE FROM {config.DESTINATION_TABLE}
+        DELETE FROM {config.DESTINATION_DB}.{config.DESTINATION_TABLE}
         WHERE id IN ({','.join([str(i) for i in [i[0] for i in delete_events]])})
     ''')
     assert controller.validator.apply_dml_events_validation()
-    cursor.execute("SELECT COUNT(1) FROM unmatched_rows")
+    cursor.execute(f"SELECT COUNT(1) FROM {config.SBOSC_DB}.unmatched_rows")
     assert cursor.fetchone()[0] == 0
 
     # Add new insert, update event
@@ -246,22 +246,22 @@ def test_apply_dml_events_validation(controller: Controller, setup_table, redis_
         (random.randint(TABLE_SIZE, TABLE_SIZE * 2), random.randint(*new_timestamp_range)) for _ in range(500)]
     new_update_events = [(random.randint(1, TABLE_SIZE), random.randint(*new_timestamp_range)) for _ in range(500)]
 
-    cursor.executemany('''
-        INSERT IGNORE INTO inserted_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
+    cursor.executemany(f'''
+        INSERT IGNORE INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
     ''', new_insert_events)
-    cursor.executemany('''
-        INSERT IGNORE INTO updated_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
+    cursor.executemany(f'''
+        INSERT IGNORE INTO {config.SBOSC_DB}.updated_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
     ''', new_update_events)
 
     cursor.executemany(f'''
-        INSERT IGNORE INTO {config.SOURCE_TABLE} (id, A, B, C) VALUES (%s, %s, %s, %s)
+        INSERT IGNORE INTO {config.SOURCE_DB}.{config.SOURCE_TABLE} (id, A, B, C) VALUES (%s, %s, %s, %s)
     ''', [(i[0], 'a', 'b', 'c') for i in new_insert_events])
     cursor.execute(f'''
-        UPDATE {config.SOURCE_TABLE} SET A = 'x' WHERE id IN ({','.join([str(i) for i in [i[0] for i in new_update_events]])})
+        UPDATE {config.SOURCE_DB}.{config.SOURCE_TABLE} SET A = 'x' WHERE id IN ({','.join([str(i) for i in [i[0] for i in new_update_events]])})
     ''')
 
     cursor.execute(f'''
-        INSERT INTO event_handler_status (migration_id, log_file, log_pos, last_event_timestamp, created_at)
+        INSERT INTO {config.SBOSC_DB}.event_handler_status (migration_id, log_file, log_pos, last_event_timestamp, created_at)
         VALUES (1, 'mysql-bin.000001', 4, {new_timestamp_range[1]}, NOW())
     ''')
 
@@ -269,18 +269,19 @@ def test_apply_dml_events_validation(controller: Controller, setup_table, redis_
 
     # Apply changes to destination table
     cursor.executemany(f'''
-        INSERT IGNORE INTO {config.DESTINATION_TABLE} (id, A, B, C) VALUES (%s, %s, %s, %s)
+        INSERT IGNORE INTO {config.DESTINATION_DB}.{config.DESTINATION_TABLE} (id, A, B, C) VALUES (%s, %s, %s, %s)
     ''', [(i[0], 'a', 'b', 'c') for i in new_insert_events])
     cursor.execute(f'''
-        UPDATE {config.DESTINATION_TABLE} SET A = 'x' WHERE id IN ({','.join([str(i) for i in [i[0] for i in new_update_events]])})
+        UPDATE {config.DESTINATION_DB}.{config.DESTINATION_TABLE} SET A = 'x' WHERE id IN ({','.join([str(i) for i in [i[0] for i in new_update_events]])})
     ''')
     assert controller.validator.apply_dml_events_validation()
-    cursor.execute("SELECT COUNT(1) FROM unmatched_rows")
+    cursor.execute(f"SELECT COUNT(1) FROM {config.SBOSC_DB}.unmatched_rows")
     assert cursor.fetchone()[0] == 0
 
     # Test full validation
     assert controller.validator.full_dml_event_validation()
 
+    cursor.execute(f"USE {config.SBOSC_DB}")
     cursor.execute("TRUNCATE TABLE event_handler_status")
     cursor.execute("TRUNCATE TABLE inserted_pk_1")
     cursor.execute("TRUNCATE TABLE updated_pk_1")
@@ -333,4 +334,4 @@ def test_swap_tables(controller: Controller, setup_table, cursor, redis_data: Re
     assert cursor.fetchone()[0] == 1
 
     # Clean up
-    cursor.execute(f"DROP TABLE _{config.SOURCE_TABLE}_old_{datetime.now().strftime('%Y%m%d')}")
+    cursor.execute(f"DROP TABLE {config.SOURCE_DB}._{config.SOURCE_TABLE}_old_{datetime.now().strftime('%Y%m%d')}")

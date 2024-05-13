@@ -41,15 +41,16 @@ class IndexConfig:
 
 class Config:
     # Migration plan
+    SBOSC_DB = 'sbosc'
     SOURCE_WRITER_ENDPOINT = ''
     SOURCE_READER_ENDPOINT = ''
     SOURCE_CLUSTER_ID = None  # optional
-    SOURCE_DB = 'sbosc'
+    SOURCE_DB = None
     SOURCE_TABLE = ''
     DESTINATION_WRITER_ENDPOINT = None
     DESTINATION_READER_ENDPOINT = None
     DESTINATION_CLUSTER_ID = None  # optional
-    DESTINATION_DB = 'sbosc'
+    DESTINATION_DB = None
     DESTINATION_TABLE = ''
     MIN_CHUNK_SIZE = 100000
     MAX_CHUNK_COUNT = 200

@@ -1,10 +1,11 @@
+sbosc_db: "sbosc"
 source_writer_endpoint: "127.0.0.1"
 source_reader_endpoint: "127.0.0.1"
 source_cluster_id: "test"
-source_db: "sbosc"
+source_db: "source"
 source_table: "source_table"
 destination_cluster_id: "test"
-destination_db: "sbosc"
+destination_db: "dest"
 destination_table: "destination_table"
 min_chunk_size: 1000
 max_chunk_count: 10

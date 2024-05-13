@@ -50,8 +50,8 @@ class SBOSCComponent:
         with self.db.cursor() as cursor:
             cursor: Cursor
             try:
-                cursor.execute('''
-                    SELECT id FROM sbosc.migration_plan
+                cursor.execute(f'''
+                    SELECT id FROM {config.SBOSC_DB}.migration_plan
                     WHERE source_cluster_id = %s AND source_db = %s AND source_table = %s
                     AND destination_cluster_id = %s AND destination_db = %s AND destination_table = %s
                 ''', (

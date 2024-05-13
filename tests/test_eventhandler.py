@@ -23,23 +23,23 @@ def ignore_deprecation_warning():
 @pytest.fixture
 def setup_table(cursor):
     # Truncate table
-    cursor.execute("TRUNCATE TABLE event_handler_status")
-    cursor.execute("TRUNCATE TABLE apply_dml_events_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.apply_dml_events_status")
     # Source table
-    cursor.execute(f"DROP TABLE IF EXISTS {config.SOURCE_TABLE}")
+    cursor.execute(f"DROP TABLE IF EXISTS {config.SOURCE_DB}.{config.SOURCE_TABLE}")
     cursor.execute(f'''
-        CREATE TABLE {config.SOURCE_TABLE} (
+        CREATE TABLE {config.SOURCE_DB}.{config.SOURCE_TABLE} (
             id INT PRIMARY KEY AUTO_INCREMENT,
             A CHAR(10), B CHAR(10), C CHAR(10)
         )
     ''')
-    print(f"Created table {config.SOURCE_TABLE}")
+    print(f"Created table {config.SOURCE_DB}.{config.SOURCE_TABLE}")
 
 
 @pytest.fixture(autouse=True)
 def init_redis(redis_data):
     redis_data.set_current_stage(Stage.APPLY_DML_EVENTS_VALIDATION)
-    redis_data.metadata.source_db = 'sbosc'
+    redis_data.metadata.source_db = config.SOURCE_DB
     redis_data.metadata.source_table = config.SOURCE_TABLE
     redis_data.updated_pk_set.delete()
     redis_data.removed_pk_set.delete()
@@ -68,7 +68,7 @@ def test_event_handler(event_handler, cursor, redis_data: RedisData):
 
     # test insert event
     cursor.executemany(
-        f'INSERT INTO {config.SOURCE_TABLE} (A, B, C) VALUES (%s, %s, %s)',
+        f'INSERT INTO {config.SOURCE_DB}.{config.SOURCE_TABLE} (A, B, C) VALUES (%s, %s, %s)',
         [('a', 'b', 'c'), ('d', 'e', 'f')]
     )
     time.sleep(100)
@@ -78,7 +78,7 @@ def test_event_handler(event_handler, cursor, redis_data: RedisData):
 
     # test update event on same pk
     cursor.executemany(
-        f'UPDATE {config.SOURCE_TABLE} SET A=%s, B=%s, C=%s WHERE id=%s',
+        f'UPDATE {config.SOURCE_DB}.{config.SOURCE_TABLE} SET A=%s, B=%s, C=%s WHERE id=%s',
         [('a', 'b', 'c', 1), ('d', 'e', 'f', 1)]
     )
     time.sleep(100)
@@ -86,7 +86,7 @@ def test_event_handler(event_handler, cursor, redis_data: RedisData):
     assert set(redis_data.updated_pk_set.get(1)) == {'1'}
 
     # test delete event
-    cursor.execute(f'DELETE FROM {config.SOURCE_TABLE} WHERE id=1')
+    cursor.execute(f'DELETE FROM {config.SOURCE_DB}.{config.SOURCE_TABLE} WHERE id=1')
     time.sleep(100)
     assert len(redis_data.updated_pk_set) == 0
     assert len(redis_data.removed_pk_set) == 1
@@ -104,7 +104,7 @@ def test_event_handler_save_to_database(event_handler, cursor, redis_data):
 
     # Remove previous data
     for table in ['inserted_pk_1', 'updated_pk_1', 'deleted_pk_1']:
-        cursor.execute(f'TRUNCATE TABLE {table}')
+        cursor.execute(f'TRUNCATE TABLE {config.SBOSC_DB}.{table}')
     redis_data.updated_pk_set.delete()
     redis_data.removed_pk_set.delete()
 
@@ -115,7 +115,7 @@ def test_event_handler_save_to_database(event_handler, cursor, redis_data):
 
     # Insert events
     for _ in range(insert_events):
-        cursor.execute(f'INSERT INTO {config.SOURCE_TABLE} (A, B, C) VALUES (%s, %s, %s)', ('a', 'b', 'c'))
+        cursor.execute(f'INSERT INTO {config.SOURCE_DB}.{config.SOURCE_TABLE} (A, B, C) VALUES (%s, %s, %s)', ('a', 'b', 'c'))
     after_insert = time.time()
     while redis_data.last_catchup_timestamp < after_insert:
         print("Waiting for INSERT events to be processed...")
@@ -126,7 +126,7 @@ def test_event_handler_save_to_database(event_handler, cursor, redis_data):
         target_id = random.choice(range(1, insert_events + 1))
         # Update events are only created when data is changed
         cursor.execute(
-            f'UPDATE {config.SOURCE_TABLE} SET A=%s, B=%s, C=%s WHERE id=%s',
+            f'UPDATE {config.SOURCE_DB}.{config.SOURCE_TABLE} SET A=%s, B=%s, C=%s WHERE id=%s',
             (f'a{i}', f'b{i}', f'c{i}', target_id)
         )
     after_update = time.time()
@@ -137,21 +137,21 @@ def test_event_handler_save_to_database(event_handler, cursor, redis_data):
     # Delete events
     deleted_ids = random.sample(range(1, insert_events + 1), delete_events)
     for target_id in deleted_ids:
-        cursor.execute(f'DELETE FROM {config.SOURCE_TABLE} WHERE id=%s', (target_id,))
+        cursor.execute(f'DELETE FROM {config.SOURCE_DB}.{config.SOURCE_TABLE} WHERE id=%s', (target_id,))
     after_delete = time.time()
     while redis_data.last_catchup_timestamp < after_delete:
         print("Waiting for DELETE events to be processed...")
         time.sleep(100)
 
     # Check if the events have been saved to the database
-    cursor.execute(f'SELECT COUNT(*) FROM inserted_pk_1')
+    cursor.execute(f'SELECT COUNT(*) FROM {config.SBOSC_DB}.inserted_pk_1')
     assert cursor.fetchone()[0] == insert_events
-    cursor.execute(f'SELECT COUNT(*) FROM {config.SOURCE_TABLE} WHERE A != %s', ('a',))
+    cursor.execute(f'SELECT COUNT(*) FROM {config.SOURCE_DB}.{config.SOURCE_TABLE} WHERE A != %s', ('a',))
     updated_source_rows = cursor.fetchone()[0]
     cursor.execute(
-        f'SELECT COUNT(*) FROM updated_pk_1 WHERE source_pk NOT IN (SELECT source_pk FROM deleted_pk_1)')
+        f'SELECT COUNT(*) FROM {config.SBOSC_DB}.updated_pk_1 WHERE source_pk NOT IN (SELECT source_pk FROM {config.SBOSC_DB}.deleted_pk_1)')
     assert cursor.fetchone()[0] == updated_source_rows
-    cursor.execute(f'SELECT COUNT(*) FROM deleted_pk_1')
+    cursor.execute(f'SELECT COUNT(*) FROM {config.SBOSC_DB}.deleted_pk_1')
     assert cursor.fetchone()[0] == delete_events
 
     # Set current stage to APPLY_DML_EVENTS

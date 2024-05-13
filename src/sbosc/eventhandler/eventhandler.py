@@ -104,7 +104,7 @@ class EventHandler(SBOSCComponent):
         with self.db.cursor(DictCursor) as cursor:
             cursor: DictCursor
             cursor.execute(f'''
-                SELECT log_file, log_pos, last_event_timestamp, created_at FROM sbosc.event_handler_status
+                SELECT log_file, log_pos, last_event_timestamp, created_at FROM {config.SBOSC_DB}.event_handler_status
                 WHERE migration_id = {self.migration_id} ORDER BY id DESC LIMIT 1
             ''')
 
@@ -155,8 +155,8 @@ class EventHandler(SBOSCComponent):
     def save_current_binlog_position(self):
         with self.db.cursor() as cursor:
             cursor: Cursor
-            cursor.execute('''
-                INSERT INTO sbosc.event_handler_status
+            cursor.execute(f'''
+                INSERT INTO {config.SBOSC_DB}.event_handler_status
                 (migration_id, log_file, log_pos, last_event_timestamp, created_at)
                 VALUES (%s, %s, %s, %s, NOW())
             ''', (self.migration_id, self.log_file, self.log_pos, self.event_store.last_event_timestamp))
@@ -171,7 +171,7 @@ class EventHandler(SBOSCComponent):
                 (f'deleted_pk_{self.migration_id}', self.event_store.delete_event_timestamp.items())
             ]:
                 cursor.executemany(f'''
-                    INSERT INTO sbosc.{table_name} (source_pk, event_timestamp)
+                    INSERT INTO {config.SBOSC_DB}.{table_name} (source_pk, event_timestamp)
                     VALUES (%s, %s) ON DUPLICATE KEY UPDATE event_timestamp = VALUES(event_timestamp)
                 ''', list(events))
         self.event_store.clear()
@@ -214,7 +214,7 @@ class EventHandler(SBOSCComponent):
         with self.db.cursor() as cursor:
             cursor: Cursor
             cursor.execute(f'''
-                SELECT COUNT(1) FROM sbosc.index_creation_status
+                SELECT COUNT(1) FROM {config.SBOSC_DB}.index_creation_status
                 WHERE migration_id = {self.migration_id} AND ended_at IS NULL
             ''')
             return cursor.fetchone()[0] == 0
@@ -240,11 +240,11 @@ class EventHandler(SBOSCComponent):
         self.save()
         with self.db.cursor() as cursor:
             cursor: Cursor
-            cursor.execute(f"SELECT COUNT(1) FROM sbosc.inserted_pk_{self.migration_id}")
+            cursor.execute(f"SELECT COUNT(1) FROM {config.SBOSC_DB}.inserted_pk_{self.migration_id}")
             inserted_count = cursor.fetchone()[0]
-            cursor.execute(f"SELECT COUNT(1) FROM sbosc.updated_pk_{self.migration_id}")
+            cursor.execute(f"SELECT COUNT(1) FROM {config.SBOSC_DB}.updated_pk_{self.migration_id}")
             updated_count = cursor.fetchone()[0]
-            cursor.execute(f"SELECT COUNT(1) FROM sbosc.deleted_pk_{self.migration_id}")
+            cursor.execute(f"SELECT COUNT(1) FROM {config.SBOSC_DB}.deleted_pk_{self.migration_id}")
             deleted_count = cursor.fetchone()[0]
         if inserted_count + updated_count + deleted_count > 0:
             while self.event_store.last_event_timestamp != self.event_loader.last_loaded_timestamp:
