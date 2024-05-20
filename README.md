@@ -12,6 +12,8 @@ metrics.
 SB-OSC is designed to overcome the limitations that existing migration tools face with large-scale tables,
 significantly reducing the operational overhead associated with managing large tables.
 
+Please visit our [blog](https://sendbird.com/blog/sb-osc-sendbird-online-schema-change) for more information.
+
 ## Takeaways
 
 SB-OSC has its own unique features that differentiate it from existing schema migration tools such as `pt-osc` and `gh-ost`.
