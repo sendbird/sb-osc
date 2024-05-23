@@ -1,40 +1,18 @@
-FROM ubuntu:20.04
+FROM python:3.11.9
 
-ENV DEBIAN_FRONTEND noninteractive
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/opt/sbosc
 
-# apt update
-RUN apt-get update && \
-    apt -y upgrade && \
-    apt-get install -y software-properties-common && \
-    add-apt-repository -y ppa:deadsnakes/ppa && \
-    apt-get update
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    default-libmysqlclient-dev \
+    default-mysql-client \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# install python
-RUN apt-get install -y python3.11 python3.11-dev python3.11-distutils build-essential
-
-# install mysql, postgres clients
-RUN apt-get install -y libmysqlclient-dev mysql-client
-
-# install utilities
-RUN apt-get install -y curl
-
-# Set working directory
 WORKDIR /opt/sbosc
 
-# Make python 3.11 the default
-# Register the version in alternatives
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
-
-# Set python 3 as the default python
-RUN update-alternatives --set python /usr/bin/python3.11
-
-# Install pip and requirements.txt
-RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python
-
-# Install requirements
+# Install any needed packages specified in requirements.txt
 COPY requirements.txt ./
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy repository
 COPY src ./
-ENV PYTHONPATH=/opt/sbosc
