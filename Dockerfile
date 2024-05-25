@@ -1,4 +1,4 @@
-FROM python:3.11.9
+FROM python:3.11.9-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/opt/sbosc
