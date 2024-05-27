@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/opt/sbosc
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \ 
+    build-essential \
     default-libmysqlclient-dev \
     default-mysql-client \
     && apt-get clean \
