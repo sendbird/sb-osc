@@ -134,7 +134,7 @@ class Initializer:
                     source_pk bigint,
                     migration_id int,
                     unmatch_type varchar(128),
-                    KEY `idx_unmatched_rows_migration_id` (`migration_id`)
+                    KEY `idx_unmatched_rows_migration_id_source_pk` (`migration_id`, `source_pk`)
                 ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
             ''')
             self.logger.info("Unmatched rows table created")

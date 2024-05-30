@@ -117,7 +117,7 @@ class BaseOperation(MigrationOperation):
                 SELECT source_pk FROM {config.SBOSC_DB}.unmatched_rows WHERE source_pk NOT IN (
                     SELECT id FROM {self.destination_db}.{self.destination_table}
                     WHERE id IN ({not_removed_pks_str})
-                ) AND source_pk IN ({not_removed_pks_str})
+                ) AND source_pk IN ({not_removed_pks_str}) AND migration_id = {self.migration_id}
             ''')
             rematched_pks = set([row[0] for row in cursor.fetchall()])
             # add reinserted pks
@@ -268,7 +268,7 @@ class CrossClusterBaseOperation(MigrationOperation):
             cursor: Cursor
             query = f'''
                 SELECT source_pk FROM {config.SBOSC_DB}.unmatched_rows
-                WHERE source_pk IN ({not_removed_pks_str})
+                WHERE source_pk IN ({not_removed_pks_str}) AND migration_id = {self.migration_id}
             '''
             if still_not_removed_pks_str:
                 query += f" AND source_pk NOT IN ({still_not_removed_pks_str})"

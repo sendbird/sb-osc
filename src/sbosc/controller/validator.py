@@ -241,7 +241,7 @@ class DataValidator:
                         matched_pks_str = ','.join([str(pk) for pk in matched_pks])
                         cursor.execute(f'''
                             DELETE FROM {config.SBOSC_DB}.unmatched_rows WHERE source_pk IN ({matched_pks_str})
-                            AND unmatch_type = '{UnmatchType.NOT_UPDATED}'
+                            AND unmatch_type = '{UnmatchType.NOT_UPDATED}' AND migration_id = {self.migration_id}
                         ''')
                 if len(not_removed_pks) > 0:
                     matched_pks = self.migration_operation.get_rematched_removed_pks(self.db, not_removed_pks)
@@ -250,7 +250,7 @@ class DataValidator:
                         matched_pks_str = ','.join([str(pk) for pk in matched_pks])
                         cursor.execute(f'''
                             DELETE FROM {config.SBOSC_DB}.unmatched_rows WHERE source_pk IN ({matched_pks_str})
-                            AND unmatch_type = '{UnmatchType.NOT_REMOVED}'
+                            AND unmatch_type = '{UnmatchType.NOT_REMOVED}' AND migration_id = {self.migration_id}
                         ''')
                 self.redis_data.updated_pk_set.add(not_updated_pks - not_removed_pks)
                 self.redis_data.updated_pk_set.remove(not_removed_pks)
