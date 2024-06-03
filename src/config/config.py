@@ -1,4 +1,5 @@
 import os
+import re
 from dataclasses import dataclass
 from importlib import import_module
 from pkgutil import walk_packages
@@ -9,25 +10,30 @@ import dns.resolver
 from config.env import Env
 
 
-def get_cluster_id(endpoint, cluster_id=None) -> str:
+def _get_cluster_id(endpoint, cluster_id=None) -> str:
     """
     Get RDS cluster identifier from endpoint or cname record if cluster_id is not provided
     :param endpoint: RDS cluster endpoint or CNAME record that targets RDS cluster endpoint
     :param cluster_id: Optional RDS cluster identifier. If provided, it will be returned
     :return: Resolved RDS cluster identifier
     """
+
+    def _is_valid_cluster_endpoint(_endpoint):
+        return bool(re.match(r'.*\.cluster-[a-z0-9]+\..+\.rds\.amazonaws\.com', _endpoint))
+
     if cluster_id is not None:
         return cluster_id
-    elif 'rds.amazonaws.com' in endpoint:
+    elif _is_valid_cluster_endpoint(endpoint):
         return endpoint.split('.')[0]
     else:
         try:
             answers = dns.resolver.resolve(endpoint, 'CNAME')
-            if len(answers) == 1 and 'rds.amazonaws.com' in answers[0].target:
-                return answers[0].target.split('.')[0]
-            else:
-                raise Exception(
-                    f"Can't get cluster_id from endpoint. Endpoint {endpoint} targets multiple cname records")
+            for answer in answers:
+                target = str(answer.target)
+                if _is_valid_cluster_endpoint(target):
+                    return target.split('.')[0]
+            raise Exception(
+                f"Can't get cluster_id from endpoint. Endpoint {endpoint} doesn't target valid cluster endpoint")
         except dns.resolver.NoAnswer:
             raise Exception(f"Can't get cluster_id from endpoint. Endpoint {endpoint} doesn't have cname record")
 
@@ -131,8 +137,8 @@ class Config:
             if self.OPERATION_CLASS == 'BaseOperation':
                 self.OPERATION_CLASS = 'CrossClusterBaseOperation'
 
-        self.SOURCE_CLUSTER_ID = get_cluster_id(self.SOURCE_WRITER_ENDPOINT, self.SOURCE_CLUSTER_ID)
-        self.DESTINATION_CLUSTER_ID = get_cluster_id(self.DESTINATION_WRITER_ENDPOINT, self.DESTINATION_CLUSTER_ID)
+        self.SOURCE_CLUSTER_ID = _get_cluster_id(self.SOURCE_WRITER_ENDPOINT, self.SOURCE_CLUSTER_ID)
+        self.DESTINATION_CLUSTER_ID = _get_cluster_id(self.DESTINATION_WRITER_ENDPOINT, self.DESTINATION_CLUSTER_ID)
 
         if self.INDEXES:
             self.INDEXES = [IndexConfig(**index) for index in self.INDEXES]
