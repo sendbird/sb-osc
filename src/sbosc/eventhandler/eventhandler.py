@@ -193,7 +193,7 @@ class EventHandler(SBOSCComponent):
                     self.logger.info('Initializing event handler')
                     self.init_event_handler()
                 else:
-                    if current_stage == Stage.APPLY_DML_EVENTS:
+                    if current_stage == Stage.APPLY_DML_EVENTS and not config.DISABLE_APPLY_DML_EVENTS:
                         self.apply_dml_events()
                     elif current_stage == Stage.APPLY_DML_EVENTS_PRE_VALIDATION:
                         self.apply_dml_events_pre_validation()
