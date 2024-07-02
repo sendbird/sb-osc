@@ -103,6 +103,9 @@ class Config:
     PK_SET_MAX_SIZE = 1000000
     EVENT_BATCH_DURATION_IN_SECONDS = 3600
 
+    # Operation Class specific config
+    OPERATION_CLASS_CONFIG = {}
+
     @property
     def operation_class(self):
         if self._operation_class is not None:
