@@ -54,33 +54,33 @@ class BaseOperation(MigrationOperation):
             not_imported_pks = [row[0] for row in source_cursor.fetchall()]
         return not_imported_pks
 
-    def get_not_inserted_pks(self, source_cursor, dest_cursor, start_timestamp, end_timestamp):
+    def get_not_inserted_pks(self, source_cursor, dest_cursor, event_pks):
         not_inserted_pks = []
-        event_pks = self._get_event_pks(source_cursor, 'insert', start_timestamp, end_timestamp)
         if event_pks:
+            event_pks_str = ','.join([str(pk) for pk in event_pks])
             source_cursor.execute(f'''
                 SELECT source.id FROM {self.source_db}.{self.source_table} AS source
                 LEFT JOIN {self.destination_db}.{self.destination_table} AS dest ON source.id = dest.id
-                WHERE source.id IN ({event_pks})
+                WHERE source.id IN ({event_pks_str})
                 AND dest.id IS NULL
             ''')
             not_inserted_pks = [row[0] for row in source_cursor.fetchall()]
         return not_inserted_pks
 
-    def get_not_updated_pks(self, source_cursor, dest_cursor, start_timestamp, end_timestamp):
+    def get_not_updated_pks(self, source_cursor, dest_cursor, event_pks):
         not_updated_pks = []
-        event_pks = self._get_event_pks(source_cursor, 'update', start_timestamp, end_timestamp)
         if event_pks:
+            event_pks_str = ','.join([str(pk) for pk in event_pks])
             source_cursor.execute(f'''
               SELECT combined.id
                 FROM (
                     SELECT {self.source_columns}, 'source' AS table_type
                     FROM {self.source_db}.{self.source_table}
-                    WHERE id IN ({event_pks})
+                    WHERE id IN ({event_pks_str})
                     UNION ALL
                     SELECT {self.source_columns}, 'destination' AS table_type
                     FROM {self.destination_db}.{self.destination_table}
-                    WHERE id IN ({event_pks})
+                    WHERE id IN ({event_pks_str})
                 ) AS combined
                 GROUP BY {self.source_columns}
                 HAVING COUNT(1) = 1 AND SUM(table_type = 'source') = 1
@@ -190,30 +190,30 @@ class CrossClusterBaseOperation(MigrationOperation):
         dest_pks = [row[0] for row in dest_cursor.fetchall()]
         return list(set(source_pks) - set(dest_pks))
 
-    def get_not_inserted_pks(self, source_cursor, dest_cursor, start_timestamp, end_timestamp):
+    def get_not_inserted_pks(self, source_cursor, dest_cursor, event_pks):
         not_inserted_pks = []
-        event_pks = self._get_event_pks(source_cursor, 'insert', start_timestamp, end_timestamp)
         if event_pks:
-            source_cursor.execute(f"SELECT id FROM {self.source_db}.{self.source_table} WHERE id IN ({event_pks})")
+            event_pks_str = ','.join([str(pk) for pk in event_pks])
+            source_cursor.execute(f"SELECT id FROM {self.source_db}.{self.source_table} WHERE id IN ({event_pks_str})")
             source_pks = [row[0] for row in source_cursor.fetchall()]
             dest_cursor.execute(
-                f"SELECT id FROM {self.destination_db}.{self.destination_table} WHERE id IN ({event_pks})")
+                f"SELECT id FROM {self.destination_db}.{self.destination_table} WHERE id IN ({event_pks_str})")
             dest_pks = [row[0] for row in dest_cursor.fetchall()]
             not_inserted_pks = list(set(source_pks) - set(dest_pks))
         return not_inserted_pks
 
-    def get_not_updated_pks(self, source_cursor, dest_cursor, start_timestamp, end_timestamp):
+    def get_not_updated_pks(self, source_cursor, dest_cursor, event_pks):
         not_updated_pks = []
-        event_pks = self._get_event_pks(source_cursor, 'update', start_timestamp, end_timestamp)
         if event_pks:
+            event_pks_str = ','.join([str(pk) for pk in event_pks])
             source_cursor.execute(f'''
                 SELECT {self.source_columns} FROM {self.source_db}.{self.source_table}
-                WHERE id IN ({event_pks})
+                WHERE id IN ({event_pks_str})
             ''')
             source_df = pd.DataFrame(source_cursor.fetchall(), columns=[c[0] for c in source_cursor.description])
             dest_cursor.execute(f'''
                 SELECT {self.source_columns} FROM {self.destination_db}.{self.destination_table}
-                WHERE id IN ({event_pks})
+                WHERE id IN ({event_pks_str})
             ''')
             dest_df = pd.DataFrame(dest_cursor.fetchall(), columns=[c[0] for c in dest_cursor.description])
 

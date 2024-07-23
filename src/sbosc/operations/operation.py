@@ -1,10 +1,9 @@
 from abc import abstractmethod
 from contextlib import contextmanager
-from typing import Literal
+from typing import List
 
 from MySQLdb.cursors import Cursor
 
-from config import config
 from modules.db import Database
 from modules.redis import RedisData
 
@@ -48,20 +47,8 @@ class MigrationOperation:
         """
         pass
 
-    def _get_event_pks(
-            self, cursor: Cursor, event_type: Literal['insert', 'update'], start_timestamp, end_timestamp):
-        table_names = {
-            'insert': f'inserted_pk_{self.migration_id}',
-            'update': f'updated_pk_{self.migration_id}'
-        }
-        cursor.execute(f'''
-            SELECT source_pk FROM {config.SBOSC_DB}.{table_names[event_type]}
-            WHERE event_timestamp BETWEEN {start_timestamp} AND {end_timestamp}
-        ''')
-        return ','.join([str(row[0]) for row in cursor.fetchall()])
-
     @abstractmethod
-    def get_not_inserted_pks(self, source_cursor: Cursor, dest_cursor: Cursor, start_timestamp, end_timestamp):
+    def get_not_inserted_pks(self, source_cursor: Cursor, dest_cursor: Cursor, event_pks: List[int]):
         """
         Returns a list of primary keys that have not been inserted into the destination table.
         Used in APPLY_DML_EVENTS_VALIDATION stage to validate that all inserts have been applied.
@@ -69,7 +56,7 @@ class MigrationOperation:
         pass
 
     @abstractmethod
-    def get_not_updated_pks(self, source_cursor: Cursor, dest_cursor: Cursor, start_timestamp, end_timestamp):
+    def get_not_updated_pks(self, source_cursor: Cursor, dest_cursor: Cursor, event_pks: List[int]):
         """
         Returns a list of primary keys that have not been updated in the destination table.
         Used in APPLY_DML_EVENTS_VALIDATION stage to validate that all updates have been applied.
