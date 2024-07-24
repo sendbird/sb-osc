@@ -68,6 +68,9 @@ class Config:
     OPERATION_CLASS = 'BaseOperation'
     INDEXES = []
     INDEX_CREATED_PER_QUERY = 4
+    INNODB_DDL_BUFFER_SIZE = None  # optional
+    INNODB_DDL_THREADS = None  # optional
+    INNODB_PARALLEL_READ_THREADS = None  # optional
 
     # Worker config
     MIN_BATCH_SIZE = 100

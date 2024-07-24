@@ -270,6 +270,19 @@ class Controller(SBOSCComponent):
                 # add index
                 with self.db.cursor(host='dest') as cursor:
                     cursor: Cursor
+
+                    # set session variables
+                    if config.INNODB_DDL_BUFFER_SIZE is not None:
+                        cursor.execute(f"SET SESSION innodb_ddl_buffer_size = {config.INNODB_DDL_BUFFER_SIZE}")
+                        self.logger.info(f"Set innodb_ddl_buffer_size to {config.INNODB_DDL_BUFFER_SIZE}")
+                    if config.INNODB_DDL_THREADS is not None:
+                        cursor.execute(f"SET SESSION innodb_ddl_threads = {config.INNODB_DDL_THREADS}")
+                        self.logger.info(f"Set innodb_ddl_threads to {config.INNODB_DDL_THREADS}")
+                    if config.INNODB_PARALLEL_READ_THREADS is not None:
+                        cursor.execute(
+                            f"SET SESSION innodb_parallel_read_threads = {config.INNODB_PARALLEL_READ_THREADS}")
+                        self.logger.info(f"Set innodb_parallel_read_threads to {config.INNODB_PARALLEL_READ_THREADS}")
+
                     cursor.execute(f'''
                         ALTER TABLE {metadata.destination_db}.{metadata.destination_table}
                         {', '.join([
