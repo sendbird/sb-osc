@@ -15,6 +15,9 @@ skip_bulk_import: False
 operation_class: BaseOperation
 indexes: []
 index_created_per_query: 4
+innodb_ddl_buffer_size: 1048576
+innodb_ddl_threads: 4
+innodb_parallel_read_threads: 4
 
 # Worker config
 min_batch_size: 100
