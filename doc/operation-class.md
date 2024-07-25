@@ -7,6 +7,13 @@ SB-OSC provides two default operation classes. `BaseOperation` is the default op
 
 You can create your own operation class by inheriting `BaseOperation` and overriding its methods. If you pass the operation class name to the `operation_class` parameter in the migration configuration, SB-OSC detect any operation class defined below `src/sbosc/opeartion` directory and use it for the migration process.  
 
+You can also add additional configs dedicated to the operation class. These configs will be passed to the operation class as `operation_config` wrapped in dataclass you defined.  
+
+```yaml
+operation_class_config:
+  retention_days: 30
+```
+
 ## Example
 
 ### BaseOperation
@@ -35,6 +42,8 @@ class MessageRetentionOperation(BaseOperation):
 
 ### CrossClusterOperation
 ```python
+from sbosc.operations.base import CrossClusterBaseOperation
+
 class CrossClusterMessageRetentionOperation(CrossClusterBaseOperation):
     def _select_batch_query(self, start_pk, end_pk):
         return f'''
@@ -57,4 +66,30 @@ class CrossClusterMessageRetentionOperation(CrossClusterBaseOperation):
         ''')
         dest_pks = [row[0] for row in dest_cursor.fetchall()]
         return list(set(source_pks) - set(dest_pks))
+```
+
+### Operation Config
+```python
+from dataclasses import dataclass
+
+from sbosc.operations.base import BaseOperation
+from sbosc.operations.operation import MigrationOperationConfig
+
+@dataclass
+class MessageRetentionConfig(MigrationOperationConfig):
+    retention_days: int
+
+
+class MessageRetentionOperation(BaseOperation):
+    operation_config_class = MessageRetentionConfig
+    operation_config: MessageRetentionConfig
+
+    def _insert_batch_query(self, start_pk, end_pk):
+        return f"""
+            INSERT INTO {self.source_db}.{self.destination_table}({self.source_columns})
+            SELECT {self.source_columns}
+            FROM {self.source_db}.{self.source_table} AS source
+            WHERE source.id BETWEEN {start_pk} AND {end_pk}
+            AND source.ts > DATE_SUB(NOW(), INTERVAL {self.operation_config.retention_days} DAY)
+        """
 ```
