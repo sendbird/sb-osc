@@ -1,15 +1,23 @@
 from abc import abstractmethod
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import List
 
 from MySQLdb.cursors import Cursor
 
+from config import config
 from modules.db import Database
 from modules.redis import RedisData
 
 
+@dataclass
+class MigrationOperationConfig:
+    pass
+
+
 class MigrationOperation:
     """Abstract class for migration operations."""
+    operation_config_class = MigrationOperationConfig
 
     def __init__(self, migration_id):
         self.migration_id = migration_id
@@ -23,6 +31,8 @@ class MigrationOperation:
         self.source_columns: str = metadata.source_columns
         self.source_column_list: list = metadata.source_columns.split(',')
         self.start_datetime = metadata.start_datetime
+
+        self.operation_config = self.operation_config_class(**config.OPERATION_CLASS_CONFIG)
 
     @abstractmethod
     def insert_batch(self, db: Database, start_pk: int, end_pk: int, upsert=False, limit=None) -> Cursor:
