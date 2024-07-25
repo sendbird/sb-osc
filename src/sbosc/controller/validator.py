@@ -126,6 +126,8 @@ class DataValidator:
                 if cursor.rowcount > 0:
                     start_timestamp = cursor.fetchone()[0]
 
+            # This ensures that all events up to the last event timestamp are all saved in the event tables
+            # save_current_binlog_position are called after save_events_to_db
             cursor.execute(f'''
                 SELECT last_event_timestamp FROM {config.SBOSC_DB}.event_handler_status
                 WHERE migration_id = {self.migration_id} ORDER BY id DESC LIMIT 1
@@ -141,13 +143,13 @@ class DataValidator:
             not_inserted_pks = self.migration_operation.get_not_inserted_pks(
                 source_cursor, dest_cursor, start_timestamp, end_timestamp)
             if not_inserted_pks:
-                self.logger.warning(f"Found {len(not_inserted_pks)} unmatched inserted pks")
+                self.logger.warning(f"Found {len(not_inserted_pks)} unmatched inserted pks: {not_inserted_pks}")
                 unmatched_pks.extend([(pk, UnmatchType.NOT_UPDATED) for pk in not_inserted_pks])
         elif table == 'updated_pk':
             not_updated_pks = self.migration_operation.get_not_updated_pks(
                 source_cursor, dest_cursor, start_timestamp, end_timestamp)
             if not_updated_pks:
-                self.logger.warning(f"Found {len(not_updated_pks)} unmatched updated pks")
+                self.logger.warning(f"Found {len(not_updated_pks)} unmatched updated pks: {not_updated_pks}")
                 unmatched_pks.extend([(pk, UnmatchType.NOT_UPDATED) for pk in not_updated_pks])
         elif table == 'deleted_pk':
             source_cursor.execute(f'''
@@ -159,7 +161,7 @@ class DataValidator:
                 dest_cursor.execute(f'''
                     SELECT id FROM {metadata.destination_db}.{metadata.destination_table} WHERE id IN ({target_pks})
                 ''')
-                deleted_pks = set([row[0] for row in dest_cursor.fetchall()])
+                not_deleted_pks = set([row[0] for row in dest_cursor.fetchall()])
                 if dest_cursor.rowcount > 0:
                     # Check if deleted pks are reinserted
                     source_cursor.execute(f'''
@@ -167,10 +169,10 @@ class DataValidator:
                     ''')
                     reinserted_pks = set([row[0] for row in source_cursor.fetchall()])
                     if reinserted_pks:
-                        deleted_pks = deleted_pks - reinserted_pks
-                        self.logger.warning(f"Found {len(reinserted_pks)} reinserted pks")
-                    self.logger.warning(f"Found {len(deleted_pks)} unmatched deleted pks")
-                    unmatched_pks.extend([(pk, UnmatchType.NOT_REMOVED) for pk in deleted_pks])
+                        not_deleted_pks = not_deleted_pks - reinserted_pks
+                        self.logger.warning(f"Found {len(reinserted_pks)} reinserted pks: {reinserted_pks}")
+                    self.logger.warning(f"Found {len(not_deleted_pks)} unmatched deleted pks: {not_deleted_pks}")
+                    unmatched_pks.extend([(pk, UnmatchType.NOT_REMOVED) for pk in not_deleted_pks])
 
     def validate_apply_dml_events_batch(self, table, range_queue: Queue, unmatched_pks):
         with self.source_conn_pool.get_connection() as source_conn, self.dest_conn_pool.get_connection() as dest_conn:
@@ -180,6 +182,7 @@ class DataValidator:
 
                 try:
                     batch_start_timestamp, batch_end_timestamp = range_queue.get_nowait()
+                    self.logger.info(f"Validating DML events from {batch_start_timestamp} to {batch_end_timestamp}")
                 except Empty:
                     self.logger.warning("Range queue is empty")
                     continue
@@ -329,7 +332,7 @@ class DataValidator:
 
     def full_dml_event_validation(self):
         """
-        :return: True if validation succeeded, False if validation failed, None if validation is skipped
+        :return: True if validation ran, False if validation skipped
         """
         self.logger.info("Start full DML event validation")
 
@@ -345,7 +348,7 @@ class DataValidator:
                 if datetime.now() - last_validation_time < timedelta(hours=self.full_dml_event_validation_interval):
                     self.logger.info(
                         "Last validation was done less than 1 hour ago. Skipping full DML event validation")
-                    return
+                    return False
 
             cursor.execute(f'''
                 SELECT MIN(event_timestamps.min_ts) FROM (
@@ -358,7 +361,7 @@ class DataValidator:
                 start_timestamp = cursor.fetchone()[0]
                 if start_timestamp is None:
                     self.logger.warning("No events found. Skipping full DML event validation")
-                    return
+                    return False
 
             cursor.execute(f'''
                 SELECT last_event_timestamp FROM {config.SBOSC_DB}.event_handler_status
@@ -368,7 +371,7 @@ class DataValidator:
                 end_timestamp = cursor.fetchone()[0]
                 if end_timestamp is None:
                     self.logger.warning("Failed to get valid end_timestamp")
-                    return
+                    return False
 
         is_valid = self.validate_apply_dml_events(start_timestamp, end_timestamp)
 
@@ -379,4 +382,4 @@ class DataValidator:
                 VALUES ({self.migration_id}, {end_timestamp}, {is_valid}, NOW())
             ''')
 
-        return is_valid
+        return True

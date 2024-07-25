@@ -280,6 +280,8 @@ def test_apply_dml_events_validation(controller: Controller, setup_table, redis_
 
     # Test full validation
     assert controller.validator.full_dml_event_validation()
+    cursor.execute(f"SELECT is_valid FROM {config.SBOSC_DB}.full_dml_event_validation_status")
+    assert cursor.fetchone()[0] == 1
 
     cursor.execute(f"USE {config.SBOSC_DB}")
     cursor.execute("TRUNCATE TABLE event_handler_status")
