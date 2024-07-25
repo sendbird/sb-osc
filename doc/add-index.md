@@ -9,3 +9,13 @@ Before `ALTER TABLE ... ADD INDEX` command finishes, index is temporarily create
 ### Free Memory (Enhanced Monitoring)
 Upon creating an index, the Free Memory as reported by Enhanced Monitoring will decrease. This decrease continues rapidly until it reaches a certain value. However, Aurora has the capability to immediately reclaim memory from FreeableMemory (as observed in CloudWatch), so this should not pose a significant issue. Nonetheless, it is important to monitor and ensure that neither Free Memory nor Freeable Memory reaches zero.
 
+### Innodb Parameters (MySQL 8.0.27 and above)
+In MySQL 8.0.27 new innodb parameters `innodb_ddl_buffer_size`, `innodb_ddl_threads`, and `innodb_parallel_read_threads` were added to improve secondary index creation.  
+SB-OSC supports options to set these parameters in the migration configuration before creating indexes.
+```yaml
+innodb_ddl_buffer_size: 1048576
+innodb_ddl_threads: 4
+innodb_parallel_read_threads: 4
+```
+Please refer to the [MySQL documentation](https://dev.mysql.com/doc/refman/8.0/en/innodb-parameters.html) for more information on these parameters.
+
