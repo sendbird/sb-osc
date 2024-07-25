@@ -23,13 +23,13 @@ os.environ.update(ENVS)
 get_logger()
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='package')
 def secret():
     from config import secret
     return secret
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='package')
 def config():
     from config import config
     return config
@@ -40,7 +40,7 @@ def request_id(request):
     return request.node.callspec.id
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='package')
 def cursor(config, secret):
     connection = MySQLdb.connect(
         host=config.SOURCE_WRITER_ENDPOINT,
@@ -55,7 +55,8 @@ def cursor(config, secret):
 
 @pytest.fixture
 def sqlalchemy_engine(config, secret):
-    return create_engine(f'mysql+mysqldb://{secret.USERNAME}:@{config.SOURCE_WRITER_ENDPOINT}:{secret.PORT}/{config.SOURCE_DB}')
+    return create_engine(
+        f'mysql+mysqldb://{secret.USERNAME}:@{config.SOURCE_WRITER_ENDPOINT}:{secret.PORT}/{config.SOURCE_DB}')
 
 
 @pytest.fixture(autouse=True)
@@ -69,13 +70,18 @@ def time_sleep_mock():
 
 
 @pytest.fixture(scope='session')
-def redis_data():
+def migration_id():
+    return 1
+
+
+@pytest.fixture(scope='session')
+def redis_data(migration_id):
     from modules.redis import RedisData
-    return RedisData(1, False)
+    return RedisData(migration_id, False)
 
 
-@pytest.fixture(autouse=True, scope='session')
-def init_migration(config, cursor, redis_data):
+@pytest.fixture(autouse=True, scope='package')
+def init_migration(config, cursor, redis_data, migration_id):
     from sbosc.const import Stage
     from sbosc.controller.initializer import Initializer
 
@@ -86,10 +92,10 @@ def init_migration(config, cursor, redis_data):
     cursor.execute(f'CREATE TABLE {config.SOURCE_DB}.{config.SOURCE_TABLE} (id int)')
     cursor.execute(f'CREATE TABLE {config.DESTINATION_DB}.{config.DESTINATION_TABLE} (id int)')
 
-    migration_id = Initializer().init_migration()
+    retrieved_migration_id = Initializer().init_migration()
 
     # Validate Initializer.init_migration
-    assert migration_id == 1
+    assert retrieved_migration_id == migration_id
     assert redis_data.current_stage == Stage.START_EVENT_HANDLER
     assert redis_data.metadata.source_db == config.SOURCE_DB
     assert redis_data.metadata.source_table == config.SOURCE_TABLE
