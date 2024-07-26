@@ -178,12 +178,12 @@ class Controller(SBOSCComponent):
             is_valid = self.validator.apply_dml_events_validation()
 
             if is_valid:
-                # Analyze table
-                with self.db.cursor(host='dest') as cursor:
-                    cursor: Cursor
-                    metadata = self.redis_data.metadata
-                    cursor.execute(f"ANALYZE TABLE {metadata.destination_db}.{metadata.destination_table}")
-                self.logger.info("Finished ANALYZE TABLE on destination table")
+                full_dml_event_validation_executed = self.validator.full_dml_event_validation()
+                if full_dml_event_validation_executed:  # Validation did not skip
+                    # Returning will call apply_dml_events_validation again
+                    # full_dml_event_validation may take a long time
+                    # So, apply_dml_events_validation needs to be called again to validate the latest DML events
+                    return
 
                 if not self.is_preferred_window():
                     self.logger.info("Waiting for preferred window")
@@ -194,9 +194,12 @@ class Controller(SBOSCComponent):
                     time.sleep(config.WAIT_INTERVAL_UNTIL_AUTO_SWAP_IN_SECONDS)
                     return
 
-                is_valid = self.validator.full_dml_event_validation()
-                if is_valid is not None:  # Validation did not skip
-                    return
+                # Analyze table
+                with self.db.cursor(host='dest') as cursor:
+                    cursor: Cursor
+                    metadata = self.redis_data.metadata
+                    cursor.execute(f"ANALYZE TABLE {metadata.destination_db}.{metadata.destination_table}")
+                self.logger.info("Finished ANALYZE TABLE on destination table")
 
                 self.redis_data.set_current_stage(Stage.SWAP_TABLES)
                 self.interval = 1

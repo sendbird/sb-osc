@@ -189,10 +189,10 @@ def test_apply_dml_events_validation(controller: Controller, setup_table, redis_
     cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
     cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.apply_dml_events_status")
 
-    # Event handler status doesn't have any row
+    # event_handler_status table doesn't have any row
     assert not controller.validator.apply_dml_events_validation()
 
-    # Insert row to event handler status and validate
+    # Insert row to event_handler_status table and validate
     cursor.execute(f'''
         INSERT INTO {config.SBOSC_DB}.event_handler_status (migration_id, log_file, log_pos, last_event_timestamp, created_at)
         VALUES (1, 'mysql-bin.000001', 4, {timestamp_range[1]}, NOW())
@@ -241,7 +241,7 @@ def test_apply_dml_events_validation(controller: Controller, setup_table, redis_
     assert cursor.fetchone()[0] == 0
 
     # Add new insert, update event
-    new_timestamp_range = (101, 200)
+    new_timestamp_range = (100, 200)
     new_insert_events = [
         (random.randint(TABLE_SIZE, TABLE_SIZE * 2), random.randint(*new_timestamp_range)) for _ in range(500)]
     new_update_events = [(random.randint(1, TABLE_SIZE), random.randint(*new_timestamp_range)) for _ in range(500)]
@@ -278,8 +278,36 @@ def test_apply_dml_events_validation(controller: Controller, setup_table, redis_
     cursor.execute(f"SELECT COUNT(1) FROM {config.SBOSC_DB}.unmatched_rows")
     assert cursor.fetchone()[0] == 0
 
+    # More records inserted than apply_dml_events_validation batch size in 1 second
+    large_insert_events = {
+        (random.randint(TABLE_SIZE * 2, TABLE_SIZE * 3), 201) for _ in range(2000)}
+    cursor.executemany(f'''
+        INSERT IGNORE INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
+    ''', large_insert_events)
+    cursor.executemany(f'''
+        INSERT IGNORE INTO {config.SOURCE_DB}.{config.SOURCE_TABLE} (id, A, B, C) VALUES (%s, %s, %s, %s)
+    ''', [(i[0], 'a', 'b', 'c') for i in large_insert_events])
+    cursor.execute(f'''
+        INSERT INTO {config.SBOSC_DB}.event_handler_status (migration_id, log_file, log_pos, last_event_timestamp, created_at)
+        VALUES (1, 'mysql-bin.000001', 4, 201, NOW())
+    ''')
+    controller.validator.apply_dml_events_validation()
+    cursor.execute(f"SELECT COUNT(1) FROM {config.SBOSC_DB}.unmatched_rows")
+    assert cursor.fetchone()[0] == len(large_insert_events)
+
+    # Apply changes to destination table
+    cursor.executemany(f'''
+        INSERT IGNORE INTO {config.DESTINATION_DB}.{config.DESTINATION_TABLE} (id, A, B, C) VALUES (%s, %s, %s, %s)
+    ''', [(i[0], 'a', 'b', 'c') for i in large_insert_events])
+
+    # requires 2 iterations to check all unmatched rows
+    controller.validator.apply_dml_events_validation()
+    assert controller.validator.apply_dml_events_validation()
+
     # Test full validation
     assert controller.validator.full_dml_event_validation()
+    cursor.execute(f"SELECT is_valid FROM {config.SBOSC_DB}.full_dml_event_validation_status")
+    assert cursor.fetchone()[0] == 1
 
     cursor.execute(f"USE {config.SBOSC_DB}")
     cursor.execute("TRUNCATE TABLE event_handler_status")
