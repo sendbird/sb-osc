@@ -64,9 +64,13 @@ class Config:
     WAIT_INTERVAL_UNTIL_AUTO_SWAP_IN_SECONDS = 60
     PREFERRED_WINDOW = '00:00-23:59'
     SKIP_BULK_IMPORT = False
+    DISABLE_APPLY_DML_EVENTS = False
     OPERATION_CLASS = 'BaseOperation'
     INDEXES = []
     INDEX_CREATED_PER_QUERY = 4
+    INNODB_DDL_BUFFER_SIZE = None  # optional
+    INNODB_DDL_THREADS = None  # optional
+    INNODB_PARALLEL_READ_THREADS = None  # optional
 
     # Worker config
     MIN_BATCH_SIZE = 100
@@ -101,6 +105,9 @@ class Config:
     # DML event loading
     PK_SET_MAX_SIZE = 1000000
     EVENT_BATCH_DURATION_IN_SECONDS = 3600
+
+    # Operation Class specific config
+    OPERATION_CLASS_CONFIG = {}
 
     @property
     def operation_class(self):

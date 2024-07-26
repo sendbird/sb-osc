@@ -1,5 +1,15 @@
 # Config
 
+## Flow Control
+SB-OSC allows user to control the flow of the migration process by setting various parameters. You can set these parameters to apply specific stages based on your environment and requirements.
+
+### skip_bulk_import
+If you set this parameter to `True`, SB-OSC will skip the bulk import stage and start from the apply DML events stage. This is useful when you have already copied the data to the destination table and only need to apply DML events. For example, when you create a clone cluster to make an initial copy and replicate changes using SB-OSC, this parameter can be set to `True`. `init_binlog_file` and `init_binlog_position` should be also set when `skip_bulk_import` is `True`, otherwise it will raise an error.
+
+### disable_apply_dml_events
+If you set this parameter to `True`, SB-OSC will pause before `apply_dml_events` stage. This is useful when you have additional steps to perform manually before applying DML events.
+
+
 ## Chunk
 ### max_chunk_count & min_chunk_size
 SB-OSC calculates the number of chunks to create based on following formula
