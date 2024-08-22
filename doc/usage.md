@@ -67,7 +67,7 @@ SB-OSC requires binlog to be enabled on the source database. Please set `binlog_
 - Set `range_optimizer_max_mem_size` to `0` or a large value to prevent bad query plans on queries with large `IN` clauses (especially on Aurora v3)
 
 ## 4. Run SB-OSC
-When all of the above steps are completed, you can start the migration process by installing the [helm chart](../charts)
+When all of the above steps are completed, you can start the migration process by installing the [helm chart](../deploy/charts)
 
 ```bash
 helm install charts sb-osc -n sb-osc --create-namespace

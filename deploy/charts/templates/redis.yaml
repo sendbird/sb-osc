@@ -42,9 +42,6 @@ spec:
         - name: redis-data
           persistentVolumeClaim:
             claimName: redis-pvc
-        - name: redis-config
-          configMap:
-            name: redis-config
         - name: redis-secret
           secret:
             secretName: sb-osc-secret
