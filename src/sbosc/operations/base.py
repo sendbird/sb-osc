@@ -11,7 +11,7 @@ class BaseOperation(MigrationOperation):
         return f'''
             INSERT INTO {self.destination_db}.{self.destination_table}({self.source_columns})
             SELECT {self.source_columns}
-            FROM {self.source_db}.{self.source_table}
+            FROM {self.source_db}.{self.source_table} AS source
             WHERE id BETWEEN {start_pk} AND {end_pk}
         '''
 
@@ -132,7 +132,7 @@ class CrossClusterBaseOperation(MigrationOperation):
     def _select_batch_query(self, start_pk, end_pk):
         return f'''
             SELECT {self.source_columns}
-            FROM {self.source_db}.{self.source_table}
+            FROM {self.source_db}.{self.source_table} AS source
             WHERE id BETWEEN {start_pk} AND {end_pk}
         '''
 
