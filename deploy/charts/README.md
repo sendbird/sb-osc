@@ -1,4 +1,4 @@
-# Usage
+# Deploying on EKS Cluster
 
 ## 1. Create AWS Resources
 
@@ -54,7 +54,7 @@ SB-OSC uses ExternalSecrets with SecretsManager for credentials. Following keys 
 - `slack_channel`: Slack channel ID (Optional)
 – `slack_token`: Slack app token (Optional)
 
-You can find these keys in [secret.py](../src/config/secret.py)
+You can find these keys in [secret.py](../../src/config/secret.py)
 
 ## 2. Create Destination Table
 SB-OSC does not create destination table on its own. Table should be manually created before starting migration.
@@ -67,7 +67,7 @@ SB-OSC requires binlog to be enabled on the source database. Please set `binlog_
 - Set `range_optimizer_max_mem_size` to `0` or a large value to prevent bad query plans on queries with large `IN` clauses (especially on Aurora v3)
 
 ## 4. Run SB-OSC
-When all of the above steps are completed, you can start the migration process by installing the [helm chart](../charts)
+When all of the above steps are completed, you can start the migration process by installing the [helm chart]()
 
 ```bash
 helm install charts sb-osc -n sb-osc --create-namespace

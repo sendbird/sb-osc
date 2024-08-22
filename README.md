@@ -74,7 +74,7 @@ processing its own binlog events.
 - `binlog_format` set to `ROW`
 - `binlog-ignore-db` set to `sbosc` (Recommended)
 
-Detailed requirements and setup instructions can be found in the [usage guide](doc/usage.md).
+Detailed requirements and setup instructions can be found in the [usage guide](deploy/README.md).
 
 ## Performance
 

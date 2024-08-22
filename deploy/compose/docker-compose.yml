@@ -1,0 +1,54 @@
+services:
+  controller: &component-base
+    image: ""  # SB-OSC image
+    container_name: controller
+    environment: &component-env
+      AWS_REGION: ""  # AWS region
+      CONFIG_FILE: "/opt/sb-osc/config.yaml"
+      SECRET_FILE: "/opt/sb-osc/secret.json"
+    volumes:
+      - ./config.yaml:/opt/sb-osc/config.yaml
+      - ./secret.json:/opt/sb-osc/secret.json
+    command: ["python", "-m", "sbosc.controller.main"]
+    restart: always
+    depends_on:
+      - redis
+
+  eventhandler:
+    <<: *component-base
+    container_name: eventhandler
+    command: ["python", "-m", "sbosc.eventhandler.main"]
+    depends_on:
+      - controller
+
+  monitor:
+    <<: *component-base
+    container_name: monitor
+    command: ["python", "-m", "sbosc.monitor.main"]
+    depends_on:
+      - controller
+
+  worker:
+    <<: *component-base
+    container_name: worker
+    command: ["python", "-m", "sbosc.worker.main"]
+    environment:
+      <<: *component-env
+      POD_NAME: "worker"
+    depends_on:
+      - controller
+
+  redis:
+    image: "redis:7.0.4"
+    container_name: redis
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+
+volumes:
+  redis-data:
