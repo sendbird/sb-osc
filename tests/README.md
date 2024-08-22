@@ -10,6 +10,7 @@ To run tests locally, you need to have `docker` and `docker-compose` installed.
 On root directory, run the following command:
 ```bash
 docker-compose -f tests/docker-compose.yml up -d
+export PYTHONPATH="$(pwd)/src/"
 python -m pytest tests
 ```
 
