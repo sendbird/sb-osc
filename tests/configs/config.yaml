@@ -26,26 +26,26 @@ max_batch_size: 10000
 min_thread_count: 4
 thread_count_step_size: 4
 max_thread_count: 8
-commit_interval: 0.01
+commit_interval_in_seconds: 0.01
 optimal_value_use_limit: 10
 use_batch_size_multiplier: False
 
 # EventHandler config
 event_handler_thread_count: 4
-event_handler_thread_timeout: 300
+event_handler_thread_timeout_in_seconds: 300
 
 # Threshold
 cpu_soft_threshold: 70
 cpu_hard_threshold: 90
-latency_soft_threshold: 20
-latency_hard_threshold: 50
+write_latency_soft_threshold: 20
+write_latency_hard_threshold: 50
 
 # Validation
 bulk_import_validation_batch_size: 1000
 apply_dml_events_validation_batch_size: 1000
 validation_thread_count: 10
-full_dml_event_validation_interval: 1
+full_dml_event_validation_interval_in_hours: 1
 
 # DML event loading
 pk_set_max_size: 10000
-event_batch_duration: 1
+event_batch_duration_in_seconds: 1

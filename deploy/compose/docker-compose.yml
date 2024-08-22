@@ -10,6 +10,7 @@ services:
       - ./config.yaml:/opt/sb-osc/config.yaml
       - ./secret.json:/opt/sb-osc/secret.json
     command: ["python", "-m", "sbosc.controller.main"]
+    restart: always
     depends_on:
       - redis
 
@@ -40,6 +41,9 @@ services:
   redis:
     image: "redis:7.0.4"
     container_name: redis
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
     ports:
       - "6379:6379"
     volumes:
