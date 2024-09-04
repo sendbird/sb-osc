@@ -27,16 +27,17 @@ class MessageRetentionOperation(BaseOperation):
             INSERT INTO {self.source_db}.{self.destination_table}({self.source_columns})
             SELECT {self.source_columns}
             FROM {self.source_db}.{self.source_table} AS source
-            WHERE source.id BETWEEN {start_pk} AND {end_pk}
+            WHERE source. BETWEEN {start_pk} AND {end_pk}
             AND source.ts > DATE_SUB(NOW(), INTERVAL 30 DAY)
         """
     def _get_not_imported_pks_query(self, start_pk, end_pk):
         return f'''
-            SELECT source.id FROM {self.source_db}.{self.source_table} AS source
-            LEFT JOIN {self.source_db}.{self.destination_table} AS dest ON source.id = dest.id
-            WHERE source.id BETWEEN {start_pk} AND {end_pk}
+            SELECT source.{self.pk_column} FROM {self.source_db}.{self.source_table} AS source
+            LEFT JOIN {self.source_db}.{self.destination_table} AS dest
+            ON source.{self.pk_column} = dest.{self.pk_column}
+            WHERE source.{self.pk_column} BETWEEN {start_pk} AND {end_pk}
             AND source.ts > DATE_SUB(NOW(), INTERVAL 30 DAY)
-            AND dest.id IS NULL
+            AND dest.{self.pk_column} IS NULL
         '''
 ```
 
@@ -48,20 +49,20 @@ class CrossClusterMessageRetentionOperation(CrossClusterBaseOperation):
     def _select_batch_query(self, start_pk, end_pk):
         return f'''
             SELECT {self.source_columns} FROM {self.source_db}.{self.source_table}
-            WHERE id BETWEEN {start_pk} AND {end_pk}
+            WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
             AND source.ts > DATE_SUB(NOW(), INTERVAL 30 DAY)
         '''
 
     def get_not_imported_pks(self, source_cursor, dest_cursor, start_pk, end_pk):
         source_cursor.execute(f'''
-            SELECT id FROM {self.source_db}.{self.source_table}
-            WHERE id BETWEEN {start_pk} AND {end_pk}
+            SELECT {self.pk_column} FROM {self.source_db}.{self.source_table}
+            WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
             AND source.ts > DATE_SUB(NOW(), INTERVAL 30 DAY)
         ''')
         source_pks = [row[0] for row in source_cursor.fetchall()]
         dest_cursor.execute(f'''
-            SELECT id FROM {self.destination_db}.{self.destination_table}
-            WHERE id BETWEEN {start_pk} AND {end_pk}
+            SELECT {self.pk_column} FROM {self.destination_db}.{self.destination_table}
+            WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
             AND source.ts > DATE_SUB(NOW(), INTERVAL 30 DAY)
         ''')
         dest_pks = [row[0] for row in dest_cursor.fetchall()]
@@ -89,7 +90,7 @@ class MessageRetentionOperation(BaseOperation):
             INSERT INTO {self.source_db}.{self.destination_table}({self.source_columns})
             SELECT {self.source_columns}
             FROM {self.source_db}.{self.source_table} AS source
-            WHERE source.id BETWEEN {start_pk} AND {end_pk}
+            WHERE source.{self.pk_column} BETWEEN {start_pk} AND {end_pk}
             AND source.ts > DATE_SUB(NOW(), INTERVAL {self.operation_config.retention_days} DAY)
         """
 ```

@@ -174,10 +174,23 @@ class Initializer:
             metadata.source_columns = cursor.fetchone()[0]
             self.logger.info("Saved source column schema to Redis")
 
+            # Get pk column
+            cursor.execute(f'''
+                SELECT COLUMN_NAME FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = '{metadata.source_db}' AND TABLE_NAME = '{metadata.source_table}'
+                AND COLUMN_KEY = 'PRI' AND EXTRA LIKE '%auto_increment%'
+            ''')
+            if cursor.rowcount == 0:
+                raise Exception("Auto increment primary key column not found")
+            metadata.pk_column = f"`{cursor.fetchone()[0]}`"
+            self.logger.info("Saved primary key column to Redis")
+
             # Get max id
-            cursor.execute("SELECT MAX(id) FROM %s.%s" % (metadata.source_db, metadata.source_table))
-            max_id = cursor.fetchone()[0]
-            metadata.max_id = max_id
+            cursor.execute("SELECT MAX(%s) FROM %s.%s" % (metadata.pk_column, metadata.source_db, metadata.source_table))
+            max_pk = cursor.fetchone()[0]
+            if max_pk is None:
+                raise Exception("No data in source table")
+            metadata.max_pk = max_pk
             self.logger.info("Saved total rows to Redis")
 
         metadata.start_datetime = datetime.now()

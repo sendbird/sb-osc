@@ -306,8 +306,8 @@ class MetricMonitor(SBOSCComponent):
             if last_pk_inserted and last_pk_inserted >= chunk_info.start_pk:
                 inserted_rows += last_pk_inserted - chunk_info.start_pk
 
-        if self.redis_data.metadata.max_id:
-            bulk_import_progress = inserted_rows / self.redis_data.metadata.max_id * 100
+        if self.redis_data.metadata.max_pk:
+            bulk_import_progress = inserted_rows / self.redis_data.metadata.max_pk * 100
             self.metric_sender.submit('sb_osc_bulk_import_progress', bulk_import_progress)
 
         self.submit_event_handler_timestamps()

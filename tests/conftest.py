@@ -89,8 +89,9 @@ def init_migration(config, cursor, redis_data, migration_id):
         cursor.execute(f'DROP DATABASE IF EXISTS {db}')
         cursor.execute(f'CREATE DATABASE {db}')
 
-    cursor.execute(f'CREATE TABLE {config.SOURCE_DB}.{config.SOURCE_TABLE} (id int)')
-    cursor.execute(f'CREATE TABLE {config.DESTINATION_DB}.{config.DESTINATION_TABLE} (id int)')
+    cursor.execute(f'CREATE TABLE {config.SOURCE_DB}.{config.SOURCE_TABLE} (id int AUTO_INCREMENT PRIMARY KEY)')
+    cursor.execute(f'INSERT INTO {config.SOURCE_DB}.{config.SOURCE_TABLE} VALUES (1)')
+    cursor.execute(f'CREATE TABLE {config.DESTINATION_DB}.{config.DESTINATION_TABLE} (id int AUTO_INCREMENT PRIMARY KEY)')
 
     retrieved_migration_id = Initializer().init_migration()
 

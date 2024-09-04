@@ -207,8 +207,8 @@ class Worker:
         with self.db.cursor(host='dest') as cursor:
             cursor: Cursor
             cursor.execute(f'''
-                SELECT MAX(id) FROM {metadata.destination_db}.{metadata.destination_table}
-                WHERE id BETWEEN {start_pk} AND {end_pk}
+                SELECT MAX({metadata.pk_column}) FROM {metadata.destination_db}.{metadata.destination_table}
+                WHERE {metadata.pk_column} BETWEEN {start_pk} AND {end_pk}
             ''')
             return cursor.fetchone()[0]
 
@@ -243,7 +243,7 @@ class Worker:
             removed_pks_str = ",".join([str(pk) for pk in removed_pks])
             query = f"""
                 DELETE FROM {metadata.destination_db}.{metadata.destination_table}
-                WHERE id IN ({removed_pks_str})
+                WHERE {metadata.pk_column} IN ({removed_pks_str})
             """
             cursor.execute(query)
         return cursor

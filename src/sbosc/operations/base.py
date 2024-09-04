@@ -12,13 +12,13 @@ class BaseOperation(MigrationOperation):
             INSERT INTO {self.destination_db}.{self.destination_table}({self.source_columns})
             SELECT {self.source_columns}
             FROM {self.source_db}.{self.source_table} AS source
-            WHERE id BETWEEN {start_pk} AND {end_pk}
+            WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
         '''
 
     def insert_batch(self, db, start_pk, end_pk, upsert=False, limit=None):
         query = self._insert_batch_query(start_pk, end_pk)
         if limit:
-            query = operation_utils.apply_limit(query, limit)
+            query = operation_utils.apply_limit(query, self.pk_column, limit)
         if upsert:
             query = operation_utils.insert_to_upsert(query, self.source_column_list)
         with db.cursor() as cursor:
@@ -32,7 +32,7 @@ class BaseOperation(MigrationOperation):
                 INSERT INTO {self.destination_db}.{self.destination_table}({self.source_columns})
                 SELECT {self.source_columns}
                 FROM {self.source_db}.{self.source_table}
-                WHERE id IN ({updated_pks_str})
+                WHERE {self.pk_column} IN ({updated_pks_str})
             '''
             query = operation_utils.insert_to_upsert(query, self.source_column_list)
             cursor.execute(query)
@@ -40,10 +40,10 @@ class BaseOperation(MigrationOperation):
 
     def _get_not_imported_pks_query(self, start_pk, end_pk):
         return f'''
-            SELECT source.id FROM {self.source_db}.{self.source_table} AS source
-            LEFT JOIN {self.destination_db}.{self.destination_table} AS dest ON source.id = dest.id
-            WHERE source.id BETWEEN {start_pk} AND {end_pk}
-            AND dest.id IS NULL
+            SELECT source.{self.pk_column} FROM {self.source_db}.{self.source_table} AS source
+            LEFT JOIN {self.destination_db}.{self.destination_table} AS dest ON source.{self.pk_column} = dest.{self.pk_column}
+            WHERE source.{self.pk_column} BETWEEN {start_pk} AND {end_pk}
+            AND dest.{self.pk_column} IS NULL
         '''
 
     def get_not_imported_pks(self, source_cursor, dest_cursor, start_pk, end_pk):
@@ -59,10 +59,11 @@ class BaseOperation(MigrationOperation):
         if event_pks:
             event_pks_str = ','.join([str(pk) for pk in event_pks])
             source_cursor.execute(f'''
-                SELECT source.id FROM {self.source_db}.{self.source_table} AS source
-                LEFT JOIN {self.destination_db}.{self.destination_table} AS dest ON source.id = dest.id
-                WHERE source.id IN ({event_pks_str})
-                AND dest.id IS NULL
+                SELECT source.{self.pk_column} FROM {self.source_db}.{self.source_table} AS source
+                LEFT JOIN {self.destination_db}.{self.destination_table} AS dest
+                ON source.{self.pk_column} = dest.{self.pk_column}
+                WHERE source.{self.pk_column} IN ({event_pks_str})
+                AND dest.{self.pk_column} IS NULL
             ''')
             not_inserted_pks = [row[0] for row in source_cursor.fetchall()]
         return not_inserted_pks
@@ -72,15 +73,15 @@ class BaseOperation(MigrationOperation):
         if event_pks:
             event_pks_str = ','.join([str(pk) for pk in event_pks])
             source_cursor.execute(f'''
-              SELECT combined.id
+              SELECT combined.{self.pk_column}
                 FROM (
                     SELECT {self.source_columns}, 'source' AS table_type
                     FROM {self.source_db}.{self.source_table}
-                    WHERE id IN ({event_pks_str})
+                    WHERE {self.pk_column} IN ({event_pks_str})
                     UNION ALL
                     SELECT {self.source_columns}, 'destination' AS table_type
                     FROM {self.destination_db}.{self.destination_table}
-                    WHERE id IN ({event_pks_str})
+                    WHERE {self.pk_column} IN ({event_pks_str})
                 ) AS combined
                 GROUP BY {self.source_columns}
                 HAVING COUNT(1) = 1 AND SUM(table_type = 'source') = 1
@@ -93,17 +94,18 @@ class BaseOperation(MigrationOperation):
         with db.cursor() as cursor:
             cursor: Cursor
             cursor.execute(f'''
-                SELECT combined.id FROM (
+                SELECT combined.{self.pk_column} FROM (
                     SELECT {self.source_columns} FROM {self.source_db}.{self.source_table}
-                    WHERE id IN ({not_updated_pks_str}) UNION ALL
+                    WHERE {self.pk_column} IN ({not_updated_pks_str}) UNION ALL
                     SELECT {self.source_columns} FROM {self.destination_db}.{self.destination_table}
-                    WHERE id IN ({not_updated_pks_str})
+                    WHERE {self.pk_column} IN ({not_updated_pks_str})
                 ) AS combined GROUP BY {self.source_columns} HAVING COUNT(*) = 2
             ''')
             rematched_pks = set([row[0] for row in cursor.fetchall()])
             # add deleted pks
             cursor.execute(f'''
-                SELECT id FROM {self.source_db}.{self.source_table} WHERE id IN ({not_updated_pks_str})
+                SELECT {self.pk_column} FROM {self.source_db}.{self.source_table}
+                WHERE {self.pk_column} IN ({not_updated_pks_str})
             ''')
             remaining_pks = set([row[0] for row in cursor.fetchall()])
             deleted_pks = not_updated_pks - remaining_pks
@@ -115,14 +117,15 @@ class BaseOperation(MigrationOperation):
             cursor: Cursor
             cursor.execute(f'''
                 SELECT source_pk FROM {config.SBOSC_DB}.unmatched_rows WHERE source_pk NOT IN (
-                    SELECT id FROM {self.destination_db}.{self.destination_table}
-                    WHERE id IN ({not_removed_pks_str})
+                    SELECT {self.pk_column} FROM {self.destination_db}.{self.destination_table}
+                    WHERE {self.pk_column} IN ({not_removed_pks_str})
                 ) AND source_pk IN ({not_removed_pks_str}) AND migration_id = {self.migration_id}
             ''')
             rematched_pks = set([row[0] for row in cursor.fetchall()])
             # add reinserted pks
             cursor.execute(f'''
-                SELECT id FROM {self.source_db}.{self.source_table} WHERE id IN ({not_removed_pks_str})
+                SELECT {self.pk_column} FROM {self.source_db}.{self.source_table}
+                WHERE {self.pk_column} IN ({not_removed_pks_str})
             ''')
             reinserted_pks = set([row[0] for row in cursor.fetchall()])
             return rematched_pks | reinserted_pks
@@ -133,13 +136,13 @@ class CrossClusterBaseOperation(MigrationOperation):
         return f'''
             SELECT {self.source_columns}
             FROM {self.source_db}.{self.source_table} AS source
-            WHERE id BETWEEN {start_pk} AND {end_pk}
+            WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
         '''
 
     def insert_batch(self, db, start_pk, end_pk, upsert=False, limit=None):
         select_batch_query = self._select_batch_query(start_pk, end_pk)
         if limit:
-            select_batch_query = operation_utils.apply_limit(select_batch_query, limit)
+            select_batch_query = operation_utils.apply_limit(select_batch_query, self.pk_column, limit)
         with db.cursor(host='source', role='reader') as cursor:
             cursor.execute(select_batch_query)
             rows = cursor.fetchall()
@@ -162,7 +165,7 @@ class CrossClusterBaseOperation(MigrationOperation):
             cursor: Cursor
             cursor.execute(f'''
                 SELECT {self.source_columns} FROM {self.source_db}.{self.source_table}
-                WHERE id IN ({updated_pks_str})
+                WHERE {self.pk_column} IN ({updated_pks_str})
             ''')
             rows = cursor.fetchall()
         if rows:
@@ -179,13 +182,13 @@ class CrossClusterBaseOperation(MigrationOperation):
 
     def get_not_imported_pks(self, source_cursor, dest_cursor, start_pk, end_pk):
         source_cursor.execute(f'''
-            SELECT id FROM {self.source_db}.{self.source_table}
-            WHERE id BETWEEN {start_pk} AND {end_pk}
+            SELECT {self.pk_column} FROM {self.source_db}.{self.source_table}
+            WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
         ''')
         source_pks = [row[0] for row in source_cursor.fetchall()]
         dest_cursor.execute(f'''
-            SELECT id FROM {self.destination_db}.{self.destination_table}
-            WHERE id BETWEEN {start_pk} AND {end_pk}
+            SELECT {self.pk_column} FROM {self.destination_db}.{self.destination_table}
+            WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
         ''')
         dest_pks = [row[0] for row in dest_cursor.fetchall()]
         return list(set(source_pks) - set(dest_pks))
@@ -194,10 +197,15 @@ class CrossClusterBaseOperation(MigrationOperation):
         not_inserted_pks = []
         if event_pks:
             event_pks_str = ','.join([str(pk) for pk in event_pks])
-            source_cursor.execute(f"SELECT id FROM {self.source_db}.{self.source_table} WHERE id IN ({event_pks_str})")
+            source_cursor.execute(f'''
+                SELECT {self.pk_column} FROM {self.source_db}.{self.source_table}
+                WHERE {self.pk_column} IN ({event_pks_str})
+            ''')
             source_pks = [row[0] for row in source_cursor.fetchall()]
-            dest_cursor.execute(
-                f"SELECT id FROM {self.destination_db}.{self.destination_table} WHERE id IN ({event_pks_str})")
+            dest_cursor.execute(f'''
+                SELECT {self.pk_column} FROM {self.destination_db}.{self.destination_table}
+                WHERE {self.pk_column} IN ({event_pks_str})
+            ''')
             dest_pks = [row[0] for row in dest_cursor.fetchall()]
             not_inserted_pks = list(set(source_pks) - set(dest_pks))
         return not_inserted_pks
@@ -208,18 +216,18 @@ class CrossClusterBaseOperation(MigrationOperation):
             event_pks_str = ','.join([str(pk) for pk in event_pks])
             source_cursor.execute(f'''
                 SELECT {self.source_columns} FROM {self.source_db}.{self.source_table}
-                WHERE id IN ({event_pks_str})
+                WHERE {self.pk_column} IN ({event_pks_str})
             ''')
             source_df = pd.DataFrame(source_cursor.fetchall(), columns=[c[0] for c in source_cursor.description])
             dest_cursor.execute(f'''
                 SELECT {self.source_columns} FROM {self.destination_db}.{self.destination_table}
-                WHERE id IN ({event_pks_str})
+                WHERE {self.pk_column} IN ({event_pks_str})
             ''')
             dest_df = pd.DataFrame(dest_cursor.fetchall(), columns=[c[0] for c in dest_cursor.description])
 
             dest_df = dest_df[source_df.columns]
-            source_df.set_index('id', inplace=True)
-            dest_df.set_index('id', inplace=True)
+            source_df.set_index(self.pk_column.strip('`'), inplace=True)
+            dest_df.set_index(self.pk_column.strip('`'), inplace=True)
             common_index = dest_df.index.intersection(source_df.index)
             source_df = source_df.loc[common_index]
             dest_df = dest_df.loc[common_index]
@@ -236,25 +244,26 @@ class CrossClusterBaseOperation(MigrationOperation):
                 cursor: Cursor
                 cursor.execute(f'''
                     SELECT {self.source_columns} FROM {self.source_db}.{self.source_table}
-                    WHERE id IN ({not_updated_pks_str})
+                    WHERE {self.pk_column} IN ({not_updated_pks_str})
                 ''')
                 source_df = pd.DataFrame(cursor.fetchall(), columns=[c[0] for c in cursor.description])
             with db.cursor(host='dest', role='reader') as cursor:
                 cursor: Cursor
                 cursor.execute(f'''
                     SELECT {self.source_columns} FROM {self.destination_db}.{self.destination_table}
-                    WHERE id IN ({not_updated_pks_str})
+                    WHERE {self.pk_column} IN ({not_updated_pks_str})
                 ''')
                 dest_df = pd.DataFrame(cursor.fetchall(), columns=[c[0] for c in cursor.description])
             dest_df = dest_df.astype(source_df.dtypes.to_dict())
             merged_df = source_df.merge(dest_df, how='inner', on=source_df.columns.tolist(), indicator=True)
-            rematched_pks = set(merged_df[merged_df['_merge'] == 'both']['id'].tolist())
+            rematched_pks = set(merged_df[merged_df['_merge'] == 'both'][self.pk_column.strip('`')].tolist())
         except pd.errors.IntCastingNaNError:
             rematched_pks = set()
         # add deleted pks
         with db.cursor(host='source', role='reader') as cursor:
             cursor.execute(f'''
-                SELECT id FROM {self.source_db}.{self.source_table} WHERE id IN ({not_updated_pks_str})
+                SELECT {self.pk_column} FROM {self.source_db}.{self.source_table}
+                WHERE {self.pk_column} IN ({not_updated_pks_str})
             ''')
             remaining_pks = set([row[0] for row in cursor.fetchall()])
         deleted_pks = not_updated_pks - remaining_pks
@@ -264,8 +273,10 @@ class CrossClusterBaseOperation(MigrationOperation):
         not_removed_pks_str = ','.join([str(pk) for pk in not_removed_pks])
         with db.cursor(host='dest', role='reader') as cursor:
             cursor: Cursor
-            cursor.execute(
-                f"SELECT id FROM {self.destination_db}.{self.destination_table} WHERE id IN ({not_removed_pks_str})")
+            cursor.execute(f'''
+                SELECT {self.pk_column} FROM {self.destination_db}.{self.destination_table}
+                WHERE {self.pk_column} IN ({not_removed_pks_str})
+            ''')
             still_not_removed_pks_str = ','.join([str(row[0]) for row in cursor.fetchall()])
         with db.cursor(host='source', role='reader') as cursor:
             cursor: Cursor
@@ -279,7 +290,8 @@ class CrossClusterBaseOperation(MigrationOperation):
             rematched_pks = set([row[0] for row in cursor.fetchall()])
             # add reinserted pks
             cursor.execute(f'''
-                SELECT id FROM {self.source_db}.{self.source_table} WHERE id IN ({not_removed_pks_str})
+                SELECT {self.pk_column} FROM {self.source_db}.{self.source_table}
+                WHERE {self.pk_column} IN ({not_removed_pks_str})
             ''')
             reinserted_pks = set([row[0] for row in cursor.fetchall()])
             return rematched_pks | reinserted_pks
