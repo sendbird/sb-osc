@@ -37,10 +37,12 @@ This file contains the credentials for the database, redis, and slack. You can f
 - `username`: Database username
 - `password`: Database password
 - `port`: Database port
-- `redis_host`: Redis endpoint (k8s Service name)
-- `redis_password`: Redis password
+- `redis_host`: Redis endpoint (Docker container name)
+- `redis_password`: Redis password (Optional)
 - `slack_channel`: Slack channel ID (Optional)
 – `slack_token`: Slack app token (Optional)
+
+`redis_password` is optional. Keep in mind that if you set a password in `redis.conf`, you should set the same password in `secret.json`.
 
 ### `redis.conf`
 This file contains the configuration for the Redis server. You can find the template in [redis.conf](redis.conf).  
