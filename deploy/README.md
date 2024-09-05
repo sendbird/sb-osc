@@ -10,3 +10,6 @@ You can build Docker image using Dockerfile in the root directory.
 ```bash
 docker build -t sb-osc .
 ```
+
+### Troubleshooting
+Issues and solutions that may occur when using SB-OSC can be found in [troubleshooting.md](../doc/troubleshooting.md).
