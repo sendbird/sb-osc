@@ -3,8 +3,10 @@
 ####################
 
 # Migration plan
-source_writer_endpoint: ""
-destination_writer_endpoint: ""
+source_writer_endpoint: ""  # If source_cluster_id is not provided, this must be cluster writer endpoint.
+source_reader_endpoint: ""
+destination_writer_endpoint: ""  # If destination_cluster_id is not provided, this must be cluster writer endpoint.
+destination_reader_endpoint: ""
 source_db: ""
 source_table: ""
 destination_db: ""
@@ -35,9 +37,7 @@ validation_thread_count: 4  # Number of threads to use for validation process (D
 
 # Migration plan
 # sbosc_db: "sbosc"  # Database to create sb-osc tables. (Default: "sbosc")
-# source_reader_endpoint: ~  # If not provided, source_writer_endpoint will be used. (Default: ~)
 # source_cluster_id: ~  # If not provided, cluster id will be retrieved from source_writer_endpoint (Default: ~)
-# destination_reader_endpoint: ~  # If not provided, destination_writer_endpoint will be used (Default: ~)
 # destination_cluster_id: ~  # If not provided, cluster id will be retrieved from destination_writer_endpoint (Default: ~)
 # min_chunk_size: 100000  # Minimum chunk size to create. (Default: 100000)
 # max_chunk_count: 200  # Maximum number of chunks to create. (Default: 200)
