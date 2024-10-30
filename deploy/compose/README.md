@@ -46,7 +46,8 @@ This file contains the credentials for the database, redis, and slack. You can f
 
 ### `redis.conf`
 This file contains the configuration for the Redis server. You can find the template in [redis.conf](redis.conf).  
-- `requirepass ""`: Match the `redis_password` set in `secret.json`
+- `requirepass ""`: Match the `redis_password` set in `secret.json`. 
+  - If `requirepass ""` is set, this means that the Redis server does not require a password. Fill in the password between the quotes to set a password.
 - `appendonly yes`: Enable AOF persistence
 - `save ""`: Disable RDB persistence
 
