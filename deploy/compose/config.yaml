@@ -1,0 +1,78 @@
+####################
+# Required configs #
+####################
+
+# Migration plan
+source_writer_endpoint: ""  # If source_cluster_id is not provided, this must be cluster writer endpoint.
+source_reader_endpoint: ""
+destination_writer_endpoint: ""  # If destination_cluster_id is not provided, this must be cluster writer endpoint.
+destination_reader_endpoint: ""
+source_db: ""
+source_table: ""
+destination_db: ""
+destination_table: ""
+
+auto_swap: false  # Whether to swap tables automatically. (Default: false)
+preferred_window: "00:00-23:59"  # Preferred window for swapping tables & bulk import validation. (Default: "00:00-23:59")
+
+# Worker config
+min_batch_size: 500  # Starting batch size to use. (Default: 500)
+max_batch_size: 3000  # Desired batch size to use. (Default: 3000)
+batch_size_step_size: 500  # Step size to increase batch size. (Default: 500)
+
+min_thread_count: 1  # Starting thread count to use. (Default: 1)
+max_thread_count: 8  # Desired thread count to use. (Default: 8)
+thread_count_step_size: 1  # Step size to increase thread count. (Default: 1)
+
+commit_interval_in_seconds: 1  # Time wait after each query executed by worker. (Default: 1)
+
+# Validator
+bulk_import_validation_batch_size: 10000  # Batch size for bulk import validation (Default: 10000)
+apply_dml_events_validation_batch_size: 1000  # Batch size for DML event validation (Default: 1000)
+validation_thread_count: 4  # Number of threads to use for validation process (Default: 4)
+
+####################
+# Optional configs #
+####################
+
+# Migration plan
+# sbosc_db: "sbosc"  # Database to create sb-osc tables. (Default: "sbosc")
+# source_cluster_id: ~  # If not provided, cluster id will be retrieved from source_writer_endpoint (Default: ~)
+# destination_cluster_id: ~  # If not provided, cluster id will be retrieved from destination_writer_endpoint (Default: ~)
+# min_chunk_size: 100000  # Minimum chunk size to create. (Default: 100000)
+# max_chunk_count: 200  # Maximum number of chunks to create. (Default: 200)
+# wait_interval_until_auto_swap_in_seconds: 60  # Interval to wait until auto swap. (Default: 60)
+# skip_bulk_import: false  # Whether to skip bulk import. (Default: false)
+# disable_apply_dml_events: false  # Whether to disable applying dml events. (Default: false)
+# operation_class: BaseOperation  # Operation class to use. (Default: BaseOperation)
+# indexes: []  # Indexes to create after bulk import. (Default: [])
+# index_created_per_query: 4  # Number of indexes to create per iteration. (Default: 4)
+# innodb_ddl_buffer_size: ~  # innodb_ddl_buffer_size for MySQL. (Default: ~)
+# innodb_ddl_threads: ~  # innodb_ddl_threads for MySQL. (Default: ~)
+# innodb_parallel_read_threads : ~  # innodb_parallel_read_threads for MySQL. (Default: ~)
+
+# Worker config
+# use_batch_size_multiplier: false  # Whether to use batch size multiplier. (Default: false)
+
+# EventHandler config
+# eventhandler_thread_count: 4  # Number of threads for EventHandler. Max number of binlog files to read at once. (Default 4. Max 4 recommended)
+# eventhandler_thread_timeout_in_seconds: 300  # Timeout for EventHandler thread. If the thread is not finished within this time, it raises exception and restarts EventHandler. (Default: 300)
+# init_binlog_file: ~  # Initial binlog file to start reading. (Default: ~)
+# init_binlog_position: ~  # Initial binlog position to start reading. (Default: ~)
+
+# Monitor threshold
+# cpu_soft_threshold: 40  # Soft threshold for CPU usage. If the CPU usage exceeds this value, thread count will be decreased into half. (Default: 40)
+# cpu_hard_threshold: 60  # Hard threshold for CPU usage. If the CPU usage exceeds this value, thread count will be decreased to 0. (Default: 60)
+# write_latency_soft_threshold: 30  # Soft threshold for WriteLatency. If the latency exceeds this value, batch size will be decreased into half. (Default: 30)
+# write_latency_hard_threshold: 50  # Hard threshold for WriteLatency. If the latency exceeds this value, batch size will be decreased to 0. (Default: 50)
+
+# Validation config
+# apply_dml_events_validation_interval_in_seconds: 10 # Interval for DML event validation (seconds) (Default: 10)
+# full_dml_event_validation_interval_in_hours: 0  # Interval for full DML event validation. 0 disables full DML event validation (hours) (Default: 0)
+
+# EventLoader config
+# pk_set_max_size: 100000  # Max number of DML PKs to load from DB at once. No more than 2 * pk_set_max_size will be kept in Redis. This is used for memory optimization. (Default: 100000)
+# event_batch_duration_in_seconds: 3600  # Timestamp range of DML events to load from DB at once (seconds). (Default: 3600)
+
+# Operation class config
+# operation_class_config: ~  # Operation class specific configurations. (Default: ~)

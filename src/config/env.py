@@ -10,7 +10,9 @@ class Env:
     Default values set in the annotations are used if the environment variable is not set.
     """
     AWS_REGION: str = 'ap-northeast-2'
-    POD_NAME: str = 'local'  # POD_NAME = 'local' will determine whether it's running in a local environment or not.
+    # POD_NAME is used to uniquely define worker metric key for each worker instance.
+    # Manually set this unique for each worker if not running in k8s.
+    POD_NAME: str = 'local'
     CONFIG_FILE: str = '/opt/sb-osc/config.yaml'
     SECRET_FILE: str = '/opt/sb-osc/secret.json'
 
