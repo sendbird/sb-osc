@@ -41,6 +41,8 @@ class SBOSCComponent:
         start_time_str, end_time_str = config.PREFERRED_WINDOW.split('-')
         start_time = datetime.strptime(start_time_str, '%H:%M').time()
         end_time = datetime.strptime(end_time_str, '%H:%M').time()
+        if start_time >= end_time:
+            return start_time <= current_time or current_time <= end_time
         return start_time <= current_time <= end_time
 
     def get_migration_id(self):
