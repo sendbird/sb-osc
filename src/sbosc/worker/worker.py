@@ -116,6 +116,10 @@ class Worker:
             start_pk = self.get_start_pk(chunk_info)
             if start_pk is None:
                 return
+            # If the start_pk is greater than the end_pk, set the last_pk_inserted to end_pk
+            # This can happen when chunk ended with a duplicate key error
+            elif start_pk > chunk_info.end_pk:
+                chunk_info.last_pk_inserted = chunk_info.end_pk
 
             end_pk = chunk_info.end_pk
             chunk_info.status = ChunkStatus.IN_PROGRESS
