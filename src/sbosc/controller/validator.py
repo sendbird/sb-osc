@@ -268,12 +268,11 @@ class DataValidator:
 
     def validate_apply_dml_events(self, start_timestamp, end_timestamp):
         unmatched_pks = []
-        with self.db.cursor() as cursor:
-            cursor: Cursor
-
-            if start_timestamp <= end_timestamp:
-                self.logger.info(f"Start validating DML events from {start_timestamp} to {end_timestamp}")
-                for table in ['inserted_pk', 'updated_pk', 'deleted_pk']:
+        if start_timestamp <= end_timestamp:
+            self.logger.info(f"Start validating DML events from {start_timestamp} to {end_timestamp}")
+            for table in ['inserted_pk', 'updated_pk', 'deleted_pk']:
+                with self.db.cursor() as cursor:
+                    cursor: Cursor
                     cursor.execute(f'''
                         ANALYZE TABLE {config.SBOSC_DB}.{table}_{self.migration_id}
                     ''')
@@ -301,14 +300,20 @@ class DataValidator:
                             for thread in threads:
                                 thread.result()
 
-            cursor.executemany(f'''
-                INSERT IGNORE INTO {config.SBOSC_DB}.unmatched_rows (source_pk, migration_id, unmatch_type)
-                VALUES (%s, {self.migration_id}, %s)
-            ''', unmatched_pks)
+            with self.db.cursor() as cursor:
+                cursor: Cursor
+                cursor.executemany(f'''
+                    INSERT IGNORE INTO {config.SBOSC_DB}.unmatched_rows (source_pk, migration_id, unmatch_type)
+                    VALUES (%s, {self.migration_id}, %s)
+                ''', unmatched_pks)
+
             self.__validate_unmatched_pks()
-            cursor.execute(
-                f"SELECT COUNT(1) FROM {config.SBOSC_DB}.unmatched_rows WHERE migration_id = {self.migration_id}")
-            unmatched_rows = cursor.fetchone()[0]
+
+            with self.db.cursor() as cursor:
+                cursor: Cursor
+                cursor.execute(
+                    f"SELECT COUNT(1) FROM {config.SBOSC_DB}.unmatched_rows WHERE migration_id = {self.migration_id}")
+                unmatched_rows = cursor.fetchone()[0]
 
         # Even though validation logic is based on data in tables following valid condition can be achieved.
         # All events are being pushed to redis in validation stage.
