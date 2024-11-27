@@ -185,7 +185,7 @@ class Initializer:
             metadata.pk_column = f"`{cursor.fetchone()[0]}`"
             self.logger.info("Saved primary key column to Redis")
 
-            # Get max id
+            # Get max PK
             cursor.execute('''
                 SELECT MAX(%s) FROM %s.%s
             ''' % (metadata.pk_column, metadata.source_db, metadata.source_table))
