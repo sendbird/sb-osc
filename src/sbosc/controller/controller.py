@@ -52,7 +52,6 @@ class Controller(SBOSCComponent):
             if action:
                 action()
 
-            # TODO: Add Redis data validation if needed
             time.sleep(self.interval)
 
         # Close db connection

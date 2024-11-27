@@ -178,14 +178,14 @@ class Initializer:
             cursor.execute(f'''
                 SELECT COLUMN_NAME FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = '{metadata.source_db}' AND TABLE_NAME = '{metadata.source_table}'
-                AND COLUMN_KEY = 'PRI' AND EXTRA LIKE '%auto_increment%'
+                AND COLUMN_KEY = 'PRI' AND DATA_TYPE IN ('int', 'bigint')
             ''')
             if cursor.rowcount == 0:
-                raise Exception("Auto increment primary key column not found")
+                raise Exception("Integer primary key column not found")
             metadata.pk_column = f"`{cursor.fetchone()[0]}`"
             self.logger.info("Saved primary key column to Redis")
 
-            # Get max id
+            # Get max PK
             cursor.execute('''
                 SELECT MAX(%s) FROM %s.%s
             ''' % (metadata.pk_column, metadata.source_db, metadata.source_table))
