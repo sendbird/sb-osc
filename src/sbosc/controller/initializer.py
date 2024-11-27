@@ -186,7 +186,9 @@ class Initializer:
             self.logger.info("Saved primary key column to Redis")
 
             # Get max id
-            cursor.execute("SELECT MAX(%s) FROM %s.%s" % (metadata.pk_column, metadata.source_db, metadata.source_table))
+            cursor.execute('''
+                SELECT MAX(%s) FROM %s.%s
+            ''' % (metadata.pk_column, metadata.source_db, metadata.source_table))
             max_pk = cursor.fetchone()[0]
             if max_pk is None:
                 raise Exception("No data in source table")

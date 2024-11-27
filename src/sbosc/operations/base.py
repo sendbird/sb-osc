@@ -41,7 +41,8 @@ class BaseOperation(MigrationOperation):
     def _get_not_imported_pks_query(self, start_pk, end_pk):
         return f'''
             SELECT source.{self.pk_column} FROM {self.source_db}.{self.source_table} AS source
-            LEFT JOIN {self.destination_db}.{self.destination_table} AS dest ON source.{self.pk_column} = dest.{self.pk_column}
+            LEFT JOIN {self.destination_db}.{self.destination_table} AS dest
+            ON source.{self.pk_column} = dest.{self.pk_column}
             WHERE source.{self.pk_column} BETWEEN {start_pk} AND {end_pk}
             AND dest.{self.pk_column} IS NULL
         '''

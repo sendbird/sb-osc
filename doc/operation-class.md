@@ -27,7 +27,7 @@ class MessageRetentionOperation(BaseOperation):
             INSERT INTO {self.source_db}.{self.destination_table}({self.source_columns})
             SELECT {self.source_columns}
             FROM {self.source_db}.{self.source_table} AS source
-            WHERE source. BETWEEN {start_pk} AND {end_pk}
+            WHERE source.{self.pk_column} BETWEEN {start_pk} AND {end_pk}
             AND source.ts > DATE_SUB(NOW(), INTERVAL 30 DAY)
         """
     def _get_not_imported_pks_query(self, start_pk, end_pk):

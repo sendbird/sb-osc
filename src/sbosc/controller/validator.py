@@ -153,13 +153,15 @@ class DataValidator:
             if event_pks:
                 event_pks_str = ','.join([str(pk) for pk in event_pks])
                 dest_cursor.execute(f'''
-                    SELECT {metadata.pk_column} FROM {metadata.destination_db}.{metadata.destination_table} WHERE {metadata.pk_column} IN ({event_pks_str})
+                    SELECT {metadata.pk_column} FROM {metadata.destination_db}.{metadata.destination_table}
+                    WHERE {metadata.pk_column} IN ({event_pks_str})
                 ''')
                 not_deleted_pks = set([row[0] for row in dest_cursor.fetchall()])
                 if dest_cursor.rowcount > 0:
                     # Check if deleted pks are reinserted
                     source_cursor.execute(f'''
-                        SELECT {metadata.pk_column} FROM {metadata.source_db}.{metadata.source_table} WHERE {metadata.pk_column} IN ({event_pks_str})
+                        SELECT {metadata.pk_column} FROM {metadata.source_db}.{metadata.source_table}
+                        WHERE {metadata.pk_column} IN ({event_pks_str})
                     ''')
                     reinserted_pks = set([row[0] for row in source_cursor.fetchall()])
                     if reinserted_pks:
