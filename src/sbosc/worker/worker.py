@@ -206,7 +206,6 @@ class Worker:
         except Exception as e:
             self.logger.error(e)
 
-
     @staticmethod
     def calculate_metrics(func: Callable[..., Cursor]):
         def wrapper(self: Self, *args, **kwargs):
