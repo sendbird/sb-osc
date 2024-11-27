@@ -100,7 +100,7 @@ class Worker:
         elif chunk_info.status == ChunkStatus.IN_PROGRESS:
             return chunk_info.last_pk_inserted + 1
         elif chunk_info.status == ChunkStatus.DUPLICATE_KEY:
-            max_pk = self.get_max_pk(chunk_info.start_pk, chunk_info.end_pk)
+            max_pk = self.migration_operation.get_max_pk(self.db, chunk_info.start_pk, chunk_info.end_pk)
             return max_pk + 1
 
     def bulk_import(self):
@@ -205,16 +205,6 @@ class Worker:
 
         except Exception as e:
             self.logger.error(e)
-
-    def get_max_pk(self, start_pk, end_pk):
-        metadata = self.redis_data.metadata
-        with self.db.cursor(host='dest') as cursor:
-            cursor: Cursor
-            cursor.execute(f'''
-                SELECT MAX({metadata.pk_column}) FROM {metadata.destination_db}.{metadata.destination_table}
-                WHERE {metadata.pk_column} BETWEEN {start_pk} AND {end_pk}
-            ''')
-            return cursor.fetchone()[0]
 
     @staticmethod
     def calculate_metrics(func: Callable[..., Cursor]):
