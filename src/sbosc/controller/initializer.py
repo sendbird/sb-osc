@@ -178,7 +178,7 @@ class Initializer:
             cursor.execute(f'''
                 SELECT COLUMN_NAME FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = '{metadata.source_db}' AND TABLE_NAME = '{metadata.source_table}'
-                AND COLUMN_KEY = 'PRI' AND EXTRA LIKE '%auto_increment%'
+                AND COLUMN_KEY = 'PRI' AND DATA_TYPE IN ('int', 'bigint')
             ''')
             if cursor.rowcount == 0:
                 raise Exception("Auto increment primary key column not found")

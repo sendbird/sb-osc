@@ -144,7 +144,11 @@ class Worker:
                     self.worker_config.update_batch_size_multiplier(cursor.rowcount)
 
                 # update last pk inserted
-                if cursor.rowcount == self.worker_config.raw_batch_size:
+                # If batch size multiplier is used,
+                # there can be remaining rows between cursor.lastrowid and batch_end_pk
+                # because of the limit clause in the query.
+                # Note that cursor.lastrowid is a non-zero value only if pk is auto-incremented.
+                if self.use_batch_size_multiplier and cursor.rowcount == self.worker_config.raw_batch_size:
                     last_pk_inserted = cursor.lastrowid
                 else:
                     last_pk_inserted = batch_end_pk
