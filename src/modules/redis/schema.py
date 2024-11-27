@@ -28,7 +28,8 @@ class Metadata(Hash):
     destination_db: str
     destination_table: str
     source_columns: str
-    max_id: int
+    pk_column: str
+    max_pk: int
     start_datetime: datetime
 
 

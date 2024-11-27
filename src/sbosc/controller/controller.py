@@ -63,14 +63,14 @@ class Controller(SBOSCComponent):
         self.redis_data.remove_all_chunks()
 
         metadata = self.redis_data.metadata
-        max_id = metadata.max_id
+        max_pk = metadata.max_pk
 
         # chunk_count is determined by min_chunk_size and max_chunk_count
         # Each chunk will have min_chunk_size rows and the number of chunks should not exceed max_chunk_count
         min_chunk_size = config.MIN_CHUNK_SIZE
         max_chunk_count = config.MAX_CHUNK_COUNT  # Number of chunks means max number of worker threads
-        chunk_count = min(max_id // min_chunk_size, max_chunk_count)
-        chunk_size = max_id // chunk_count
+        chunk_count = min(max_pk // min_chunk_size, max_chunk_count)
+        chunk_size = max_pk // chunk_count
 
         # Create chunks
         # Each chunk will have a range of primary key values [start_pk, end_pk]
@@ -79,7 +79,7 @@ class Controller(SBOSCComponent):
             start_pk = i * chunk_size + 1
             end_pk = (i + 1) * chunk_size
             if i == chunk_count - 1:
-                end_pk = max_id
+                end_pk = max_pk
 
             chunk_id = f"{self.migration_id}-{i}"
             chunk_info = self.redis_data.get_chunk_info(chunk_id)
@@ -112,7 +112,7 @@ class Controller(SBOSCComponent):
         self.redis_data.set_current_stage(Stage.BULK_IMPORT)
         self.slack.send_message(
             subtitle="Bulk import started",
-            message=f"Max id: {max_id}\n"
+            message=f"Max PK: {max_pk}\n"
                     f"Chunk count: {chunk_count}\n"
                     f"Chunk size: {chunk_size}\n"
                     f"Batch size: {config.MIN_BATCH_SIZE}\n"
@@ -343,7 +343,7 @@ class Controller(SBOSCComponent):
                 old_source_table = f"{metadata.source_db}.{self.redis_data.old_source_table}"
                 cursor.execute(f"RENAME TABLE {source_table} TO {old_source_table}")
                 after_rename_table_timestamp = time.time()
-                cursor.execute(f"SELECT MAX(id) FROM {old_source_table}")
+                cursor.execute(f"SELECT MAX({metadata.pk_column}) FROM {old_source_table}")
                 final_max_id = cursor.fetchone()[0]
 
                 with self.validator.migration_operation.override_source_table(self.redis_data.old_source_table):

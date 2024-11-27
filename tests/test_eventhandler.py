@@ -97,7 +97,7 @@ def test_event_handler_save_to_database(event_handler, cursor, redis_data):
     time.sleep(100)
 
     total_events = 1000
-    redis_data.metadata.max_id = total_events
+    redis_data.metadata.max_pk = total_events
     insert_events = total_events // 2
     update_events = (total_events - insert_events) // 2
     delete_events = total_events - insert_events - update_events

@@ -30,6 +30,7 @@ class MigrationOperation:
         self.destination_table = metadata.destination_table
         self.source_columns: str = metadata.source_columns
         self.source_column_list: list = metadata.source_columns.split(',')
+        self.pk_column = metadata.pk_column
         self.start_datetime = metadata.start_datetime
 
         self.operation_config = self.operation_config_class(**config.OPERATION_CLASS_CONFIG)
