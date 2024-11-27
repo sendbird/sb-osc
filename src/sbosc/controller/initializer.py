@@ -181,7 +181,7 @@ class Initializer:
                 AND COLUMN_KEY = 'PRI' AND DATA_TYPE IN ('int', 'bigint')
             ''')
             if cursor.rowcount == 0:
-                raise Exception("Auto increment primary key column not found")
+                raise Exception("Integer primary key column not found")
             metadata.pk_column = f"`{cursor.fetchone()[0]}`"
             self.logger.info("Saved primary key column to Redis")
 
