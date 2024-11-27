@@ -38,6 +38,16 @@ class BaseOperation(MigrationOperation):
             cursor.execute(query)
         return cursor
 
+    def get_max_pk(self, db, start_pk, end_pk):
+        metadata = self.redis_data.metadata
+        with db.cursor(host='dest') as cursor:
+            cursor: Cursor
+            cursor.execute(f'''
+               SELECT MAX({self.pk_column}) FROM {metadata.destination_db}.{metadata.destination_table}
+               WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
+           ''')
+            return cursor.fetchone()[0]
+
     def _get_not_imported_pks_query(self, start_pk, end_pk):
         return f'''
             SELECT source.{self.pk_column} FROM {self.source_db}.{self.source_table} AS source
@@ -180,6 +190,16 @@ class CrossClusterBaseOperation(MigrationOperation):
                 return cursor
         else:
             return cursor
+
+    def get_max_pk(self, db, start_pk, end_pk):
+        metadata = self.redis_data.metadata
+        with db.cursor(host='dest') as cursor:
+            cursor: Cursor
+            cursor.execute(f'''
+               SELECT MAX({self.pk_column}) FROM {metadata.destination_db}.{metadata.destination_table}
+               WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
+           ''')
+            return cursor.fetchone()[0]
 
     def get_not_imported_pks(self, source_cursor, dest_cursor, start_pk, end_pk):
         source_cursor.execute(f'''

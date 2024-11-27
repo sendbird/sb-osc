@@ -51,6 +51,14 @@ class MigrationOperation:
         pass
 
     @abstractmethod
+    def get_max_pk(self, db: Database, start_pk: int, end_pk: int) -> int:
+        """
+        Returns the maximum primary key in the destination table.
+        Used when chunk status is DUPLICATE_KEY to determine starting batch range.
+        """
+        pass
+
+    @abstractmethod
     def get_not_imported_pks(self, source_cursor: Cursor, dest_cursor: Cursor, start_pk: int, end_pk: int) -> list:
         """
         Returns a list of primary keys that have not been imported into the destination table.
