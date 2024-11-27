@@ -34,3 +34,6 @@ These parameters control insert throughput of SB-OSC. `batch_size` and `thread_c
 
 `LIMIT batch_size` is applied to the next query to prevent from inserting too many rows at once.
 
+**Note:** This option utilizes cursor.lastrowid to the `last_inserted_pk` which only returns non-zero value when table has **AUTO_INCREMENT** column.
+([MySQL Document](https://dev.mysql.com/doc/connector-python/en/connector-python-api-mysqlcursor-lastrowid.html))
+
