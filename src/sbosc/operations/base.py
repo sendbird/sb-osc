@@ -43,9 +43,9 @@ class BaseOperation(MigrationOperation):
         with db.cursor(host='dest') as cursor:
             cursor: Cursor
             cursor.execute(f'''
-               SELECT MAX({self.pk_column}) FROM {metadata.destination_db}.{metadata.destination_table}
-               WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
-           ''')
+                SELECT MAX({self.pk_column}) FROM {metadata.destination_db}.{metadata.destination_table}
+                WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
+            ''')
             return cursor.fetchone()[0]
 
     def _get_not_imported_pks_query(self, start_pk, end_pk):
@@ -196,21 +196,23 @@ class CrossClusterBaseOperation(MigrationOperation):
         with db.cursor(host='dest') as cursor:
             cursor: Cursor
             cursor.execute(f'''
-               SELECT MAX({self.pk_column}) FROM {metadata.destination_db}.{metadata.destination_table}
-               WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
-           ''')
+                   SELECT MAX({self.pk_column}) FROM {metadata.destination_db}.{metadata.destination_table}
+                   WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
+               ''')
             return cursor.fetchone()[0]
 
+    def _get_not_imported_pks_query(self, table, start_pk, end_pk):
+        return f'''
+            SELECT {self.pk_column} FROM {table} AS source
+            WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
+        '''
+
     def get_not_imported_pks(self, source_cursor, dest_cursor, start_pk, end_pk):
-        source_cursor.execute(f'''
-            SELECT {self.pk_column} FROM {self.source_db}.{self.source_table}
-            WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
-        ''')
+        source_cursor.execute(
+            self._get_not_imported_pks_query(f'{self.source_db}.{self.source_table}', start_pk, end_pk))
         source_pks = [row[0] for row in source_cursor.fetchall()]
-        dest_cursor.execute(f'''
-            SELECT {self.pk_column} FROM {self.destination_db}.{self.destination_table}
-            WHERE {self.pk_column} BETWEEN {start_pk} AND {end_pk}
-        ''')
+        dest_cursor.execute(
+            self._get_not_imported_pks_query(f'{self.destination_db}.{self.destination_table}', start_pk, end_pk))
         dest_pks = [row[0] for row in dest_cursor.fetchall()]
         return list(set(source_pks) - set(dest_pks))
 
