@@ -169,7 +169,6 @@ class Controller(SBOSCComponent):
                         self.redis_data.set_current_stage(Stage.APPLY_DML_EVENTS)
                     else:
                         self.redis_data.set_current_stage(Stage.DONE)
-                    self.redis_data.set_current_stage(Stage.APPLY_DML_EVENTS)
                     self.slack.send_message(message="Bulk import validation succeeded", color="good")
             except StopFlagSet:
                 return
@@ -216,45 +215,46 @@ class Controller(SBOSCComponent):
         finished_all_creation = False
         while not self.stop_flag:
             finished_creation = False
-            with self.db.cursor() as cursor:
-                cursor: Cursor
+            with self.db.cursor(role='reader') as source_cursor:
+                source_cursor: Cursor
 
                 index_info = None
-                cursor.execute(f'''
+                source_cursor.execute(f'''
                     SELECT index_name FROM {config.SBOSC_DB}.index_creation_status
                     WHERE migration_id = %s AND ended_at IS NULL AND started_at IS NOT NULL
                 ''', (self.migration_id,))
 
-                if cursor.rowcount > 0:
-                    index_names = [row[0] for row in cursor.fetchall()]
+                if source_cursor.rowcount > 0:
+                    index_names = [row[0] for row in source_cursor.fetchall()]
                     self.slack.send_message(
                         subtitle="Found unfinished index creation", message=f"Indexes: {index_names}", color="warning")
 
                     while True:
                         if self.stop_flag:
                             return
-                        cursor.execute(f'''
-                            SELECT DISTINCT database_name, table_name, index_name FROM mysql.innodb_index_stats
-                            WHERE database_name = %s AND table_name = %s
-                            AND index_name IN ({','.join(['%s'] * len(index_names))})
-                        ''', [metadata.destination_db, metadata.destination_table] + index_names)
-                        if cursor.rowcount == len(index_names):
-                            finished_creation = True
-                            break
+                        with self.db.cursor(host='dest', role='reader') as dest_cursor:
+                            dest_cursor.execute(f'''
+                                SELECT DISTINCT database_name, table_name, index_name FROM mysql.innodb_index_stats
+                                WHERE database_name = %s AND table_name = %s
+                                AND index_name IN ({','.join(['%s'] * len(index_names))})
+                            ''', [metadata.destination_db, metadata.destination_table] + index_names)
+                            if dest_cursor.rowcount == len(index_names):
+                                finished_creation = True
+                                break
                         self.logger.info("Waiting for index creation to finish")
                         time.sleep(60)
 
                 else:
-                    cursor.execute(f'''
+                    source_cursor.execute(f'''
                         SELECT index_name, index_columns, is_unique FROM {config.SBOSC_DB}.index_creation_status
                         WHERE migration_id = %s AND ended_at IS NULL LIMIT {config.INDEX_CREATED_PER_QUERY}
                     ''', (self.migration_id,))
 
-                    if cursor.rowcount == 0:
+                    if source_cursor.rowcount == 0:
                         finished_all_creation = True
                         break
 
-                    index_info = cursor.fetchall()
+                    index_info = source_cursor.fetchall()
                     index_names = [index_name for index_name, *_ in index_info]
 
             if index_info and not finished_creation:
@@ -263,30 +263,30 @@ class Controller(SBOSCComponent):
 
                 # update ended_at
                 started_at = datetime.now()
-                with self.db.cursor() as cursor:
-                    cursor: Cursor
-                    cursor.executemany(f'''
+                with self.db.cursor() as source_cursor:
+                    source_cursor: Cursor
+                    source_cursor.executemany(f'''
                        UPDATE {config.SBOSC_DB}.index_creation_status SET started_at = %s
                        WHERE migration_id = %s AND index_name = %s
                    ''', [(started_at, self.migration_id, index_name) for index_name in index_names])
 
                 # add index
-                with self.db.cursor(host='dest') as cursor:
-                    cursor: Cursor
+                with self.db.cursor(host='dest') as dest_cursor:
+                    dest_cursor: Cursor
 
                     # set session variables
                     if config.INNODB_DDL_BUFFER_SIZE is not None:
-                        cursor.execute(f"SET SESSION innodb_ddl_buffer_size = {config.INNODB_DDL_BUFFER_SIZE}")
+                        dest_cursor.execute(f"SET SESSION innodb_ddl_buffer_size = {config.INNODB_DDL_BUFFER_SIZE}")
                         self.logger.info(f"Set innodb_ddl_buffer_size to {config.INNODB_DDL_BUFFER_SIZE}")
                     if config.INNODB_DDL_THREADS is not None:
-                        cursor.execute(f"SET SESSION innodb_ddl_threads = {config.INNODB_DDL_THREADS}")
+                        dest_cursor.execute(f"SET SESSION innodb_ddl_threads = {config.INNODB_DDL_THREADS}")
                         self.logger.info(f"Set innodb_ddl_threads to {config.INNODB_DDL_THREADS}")
                     if config.INNODB_PARALLEL_READ_THREADS is not None:
-                        cursor.execute(
+                        dest_cursor.execute(
                             f"SET SESSION innodb_parallel_read_threads = {config.INNODB_PARALLEL_READ_THREADS}")
                         self.logger.info(f"Set innodb_parallel_read_threads to {config.INNODB_PARALLEL_READ_THREADS}")
 
-                    cursor.execute(f'''
+                    dest_cursor.execute(f'''
                         ALTER TABLE {metadata.destination_db}.{metadata.destination_table}
                         {', '.join([
                         f"ADD{' UNIQUE' if is_unique else ''} INDEX {index_name} ({index_columns})"
@@ -299,9 +299,9 @@ class Controller(SBOSCComponent):
             if finished_creation:
                 # update ended_at
                 ended_at = datetime.now()
-                with self.db.cursor() as cursor:
-                    cursor: Cursor
-                    cursor.executemany(f'''
+                with self.db.cursor() as source_cursor:
+                    source_cursor: Cursor
+                    source_cursor.executemany(f'''
                         UPDATE {config.SBOSC_DB}.index_creation_status SET ended_at = %s
                         WHERE migration_id = %s AND index_name = %s
                     ''', [(ended_at, self.migration_id, index_name) for index_name in index_names])
