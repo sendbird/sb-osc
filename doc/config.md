@@ -9,6 +9,11 @@ If you set this parameter to `True`, SB-OSC will skip the bulk import stage and 
 ### disable_apply_dml_events
 If you set this parameter to `True`, SB-OSC will pause before `apply_dml_events` stage. This is useful when you have additional steps to perform manually before applying DML events.
 
+### disable_eventhandler
+If you set this parameter to `True`, SB-OSC will disable eventhandler, which means it will not process binlog events. Only bulk import will be performed.  
+
+After `bulk_import_validation` stage it will move directly to `done` stage. So, `add_index` stage will be skipped since `apply_dml_events` stage will not be executed.
+
 
 ## Chunk
 ### max_chunk_count & min_chunk_size
