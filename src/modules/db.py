@@ -74,7 +74,10 @@ class Connection:
     def ping(self):
         if not self._conn:
             self._conn = self.connect()
-        self._conn.ping()
+        try:
+            self._conn.ping()
+        except OperationalError:
+            self._conn = self.connect()
 
     def close(self):
         if self._conn:
@@ -104,10 +107,7 @@ class ConnectionPool:
 
         yield conn
 
-        try:
-            conn.ping()
-        except OperationalError:
-            conn = Connection(self.endpoint)
+        conn.ping()
         if self.free_connections.full():
             raise Exception("Connection pool full")
         else:
