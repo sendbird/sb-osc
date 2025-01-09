@@ -69,8 +69,8 @@ class DataValidator:
                             return False
                     except MySQLdb.OperationalError as e:
                         self.__handle_operational_error(e, range_queue, batch_start_pk, batch_end_pk)
-                        source_conn.ping(True)
-                        dest_conn.ping(True)
+                        source_conn.ping()
+                        dest_conn.ping()
                         continue
                     except Empty:
                         self.logger.warning("Range queue is empty")
@@ -226,8 +226,8 @@ class DataValidator:
                                 )
                         except MySQLdb.OperationalError as e:
                             self.__handle_operational_error(e, range_queue, batch_start_timestamp, batch_end_timestamp)
-                            source_conn.ping(True)
-                            dest_conn.ping(True)
+                            source_conn.ping()
+                            dest_conn.ping()
                             continue
 
     def __validate_unmatched_pks(self):
