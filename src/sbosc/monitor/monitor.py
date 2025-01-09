@@ -310,6 +310,9 @@ class MetricMonitor(SBOSCComponent):
             bulk_import_progress = inserted_rows / self.redis_data.metadata.max_pk * 100
             self.metric_sender.submit('sb_osc_bulk_import_progress', bulk_import_progress)
 
+        if config.DISABLE_EVENTHANDLER:
+            return
+
         self.submit_event_handler_timestamps()
 
         # remaining_binlog_size

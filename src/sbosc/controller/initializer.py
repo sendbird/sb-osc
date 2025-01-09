@@ -196,7 +196,10 @@ class Initializer:
             self.logger.info("Saved total rows to Redis")
 
         metadata.start_datetime = datetime.now()
-        redis_data.set_current_stage(Stage.START_EVENT_HANDLER)
+        if not config.DISABLE_EVENTHANDLER:
+            redis_data.set_current_stage(Stage.START_EVENT_HANDLER)
+        else:
+            redis_data.set_current_stage(Stage.BULK_IMPORT_CHUNK_CREATION)
 
     def init_migration(self):
         if not self.check_database_setup():

@@ -188,7 +188,7 @@ class EventHandler(SBOSCComponent):
         self.logger.info('Starting event handler')
         while not self.stop_flag:
             current_stage = self.redis_data.current_stage
-            if Stage.DONE > current_stage >= Stage.START_EVENT_HANDLER:
+            if Stage.DONE > current_stage >= Stage.START_EVENT_HANDLER and not config.DISABLE_EVENTHANDLER:
                 if self.log_file is None or self.log_pos is None:
                     self.logger.info('Initializing event handler')
                     self.init_event_handler()

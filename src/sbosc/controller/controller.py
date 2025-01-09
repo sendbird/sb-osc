@@ -52,7 +52,6 @@ class Controller(SBOSCComponent):
             if action:
                 action()
 
-            # TODO: Add Redis data validation if needed
             time.sleep(self.interval)
 
         # Close db connection
@@ -166,6 +165,10 @@ class Controller(SBOSCComponent):
                     self.redis_data.set_current_stage(Stage.BULK_IMPORT_VALIDATION_FAILED)
                     self.slack.send_message(message="Bulk import validation failed", color="danger")
                 else:
+                    if not config.DISABLE_EVENTHANDLER:
+                        self.redis_data.set_current_stage(Stage.APPLY_DML_EVENTS)
+                    else:
+                        self.redis_data.set_current_stage(Stage.DONE)
                     self.redis_data.set_current_stage(Stage.APPLY_DML_EVENTS)
                     self.slack.send_message(message="Bulk import validation succeeded", color="good")
             except StopFlagSet:
