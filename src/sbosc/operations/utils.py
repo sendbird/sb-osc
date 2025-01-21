@@ -6,5 +6,5 @@ def insert_to_upsert(query: str, source_columns: list) -> str:
     return query
 
 
-def apply_limit(query: str, limit: int) -> str:
-    return query + f" ORDER BY id LIMIT {limit}"
+def apply_limit(query: str, pk_column: str, limit: int) -> str:
+    return query + f" ORDER BY {pk_column} LIMIT {limit}"

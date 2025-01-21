@@ -113,7 +113,7 @@ def test_update_worker_config(monitor, redis_data):
 def test_check_migration_status(monitor, cursor, redis_data):
     cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
     cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.apply_dml_events_status")
-    monitor.redis_data.metadata.max_id = 0
+    monitor.redis_data.metadata.max_pk = 0
     monitor.check_migration_status()
     metric_set = get_metric_names(monitor)
     expected_metrics = {
@@ -124,7 +124,7 @@ def test_check_migration_status(monitor, cursor, redis_data):
     }
     assert metric_set == expected_metrics
 
-    monitor.redis_data.metadata.max_id = 100
+    monitor.redis_data.metadata.max_pk = 100
     monitor.check_migration_status()
     metric_set = get_metric_names(monitor)
     expected_metrics.add('sb_osc_bulk_import_progress')

@@ -69,8 +69,8 @@ class DataValidator:
                             return False
                     except MySQLdb.OperationalError as e:
                         self.__handle_operational_error(e, range_queue, batch_start_pk, batch_end_pk)
-                        source_conn.ping(True)
-                        dest_conn.ping(True)
+                        source_conn.ping()
+                        dest_conn.ping()
                         continue
                     except Empty:
                         self.logger.warning("Range queue is empty")
@@ -83,8 +83,8 @@ class DataValidator:
         metadata = self.redis_data.metadata
         range_queue = Queue()
         start_pk = 0
-        while start_pk <= metadata.max_id:
-            range_queue.put((start_pk, min(start_pk + self.bulk_import_batch_size, metadata.max_id)))
+        while start_pk <= metadata.max_pk:
+            range_queue.put((start_pk, min(start_pk + self.bulk_import_batch_size, metadata.max_pk)))
             start_pk += self.bulk_import_batch_size + 1
         failed_pks = []
 
@@ -153,13 +153,15 @@ class DataValidator:
             if event_pks:
                 event_pks_str = ','.join([str(pk) for pk in event_pks])
                 dest_cursor.execute(f'''
-                    SELECT id FROM {metadata.destination_db}.{metadata.destination_table} WHERE id IN ({event_pks_str})
+                    SELECT {metadata.pk_column} FROM {metadata.destination_db}.{metadata.destination_table}
+                    WHERE {metadata.pk_column} IN ({event_pks_str})
                 ''')
                 not_deleted_pks = set([row[0] for row in dest_cursor.fetchall()])
                 if dest_cursor.rowcount > 0:
                     # Check if deleted pks are reinserted
                     source_cursor.execute(f'''
-                        SELECT id FROM {metadata.source_db}.{metadata.source_table} WHERE id IN ({event_pks_str})
+                        SELECT {metadata.pk_column} FROM {metadata.source_db}.{metadata.source_table}
+                        WHERE {metadata.pk_column} IN ({event_pks_str})
                     ''')
                     reinserted_pks = set([row[0] for row in source_cursor.fetchall()])
                     if reinserted_pks:
@@ -224,8 +226,8 @@ class DataValidator:
                                 )
                         except MySQLdb.OperationalError as e:
                             self.__handle_operational_error(e, range_queue, batch_start_timestamp, batch_end_timestamp)
-                            source_conn.ping(True)
-                            dest_conn.ping(True)
+                            source_conn.ping()
+                            dest_conn.ping()
                             continue
 
     def __validate_unmatched_pks(self):

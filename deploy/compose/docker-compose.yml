@@ -12,7 +12,8 @@ services:
     command: ["python", "-m", "sbosc.controller.main"]
     restart: always
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   eventhandler:
     <<: *component-base
@@ -49,6 +50,11 @@ services:
     volumes:
       - redis-data:/data
       - ./redis.conf:/usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   redis-data:

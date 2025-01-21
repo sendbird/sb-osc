@@ -100,7 +100,7 @@ class Worker:
         elif chunk_info.status == ChunkStatus.IN_PROGRESS:
             return chunk_info.last_pk_inserted + 1
         elif chunk_info.status == ChunkStatus.DUPLICATE_KEY:
-            max_pk = self.get_max_pk(chunk_info.start_pk, chunk_info.end_pk)
+            max_pk = self.migration_operation.get_max_pk(self.db, chunk_info.start_pk, chunk_info.end_pk)
             return max_pk + 1
 
     def bulk_import(self):
@@ -144,7 +144,11 @@ class Worker:
                     self.worker_config.update_batch_size_multiplier(cursor.rowcount)
 
                 # update last pk inserted
-                if cursor.rowcount == self.worker_config.raw_batch_size:
+                # If batch size multiplier is used,
+                # there can be remaining rows between cursor.lastrowid and batch_end_pk
+                # because of the limit clause in the query.
+                # Note that cursor.lastrowid is a non-zero value only if pk is auto-incremented.
+                if self.use_batch_size_multiplier and cursor.rowcount == self.worker_config.raw_batch_size:
                     last_pk_inserted = cursor.lastrowid
                 else:
                     last_pk_inserted = batch_end_pk
@@ -206,16 +210,6 @@ class Worker:
         except Exception as e:
             self.logger.error(e)
 
-    def get_max_pk(self, start_pk, end_pk):
-        metadata = self.redis_data.metadata
-        with self.db.cursor(host='dest') as cursor:
-            cursor: Cursor
-            cursor.execute(f'''
-                SELECT MAX(id) FROM {metadata.destination_db}.{metadata.destination_table}
-                WHERE id BETWEEN {start_pk} AND {end_pk}
-            ''')
-            return cursor.fetchone()[0]
-
     @staticmethod
     def calculate_metrics(func: Callable[..., Cursor]):
         def wrapper(self: Self, *args, **kwargs):
@@ -247,7 +241,7 @@ class Worker:
             removed_pks_str = ",".join([str(pk) for pk in removed_pks])
             query = f"""
                 DELETE FROM {metadata.destination_db}.{metadata.destination_table}
-                WHERE id IN ({removed_pks_str})
+                WHERE {metadata.pk_column} IN ({removed_pks_str})
             """
             cursor.execute(query)
         return cursor

@@ -30,6 +30,7 @@ class MigrationOperation:
         self.destination_table = metadata.destination_table
         self.source_columns: str = metadata.source_columns
         self.source_column_list: list = metadata.source_columns.split(',')
+        self.pk_column = metadata.pk_column
         self.start_datetime = metadata.start_datetime
 
         self.operation_config = self.operation_config_class(**config.OPERATION_CLASS_CONFIG)
@@ -46,6 +47,14 @@ class MigrationOperation:
     def apply_update(self, db: Database, updated_pks: list) -> Cursor:
         """
         Executes a query to apply DML update (insert) events to the destination table.
+        """
+        pass
+
+    @abstractmethod
+    def get_max_pk(self, db: Database, start_pk: int, end_pk: int) -> int:
+        """
+        Returns the maximum primary key in the destination table.
+        Used when chunk status is DUPLICATE_KEY to determine starting batch range.
         """
         pass
 

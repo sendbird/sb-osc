@@ -174,14 +174,32 @@ class Initializer:
             metadata.source_columns = cursor.fetchone()[0]
             self.logger.info("Saved source column schema to Redis")
 
-            # Get max id
-            cursor.execute("SELECT MAX(id) FROM %s.%s" % (metadata.source_db, metadata.source_table))
-            max_id = cursor.fetchone()[0]
-            metadata.max_id = max_id
+            # Get pk column
+            cursor.execute(f'''
+                SELECT COLUMN_NAME FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = '{metadata.source_db}' AND TABLE_NAME = '{metadata.source_table}'
+                AND COLUMN_KEY = 'PRI' AND DATA_TYPE IN ('int', 'bigint')
+            ''')
+            if cursor.rowcount == 0:
+                raise Exception("Integer primary key column not found")
+            metadata.pk_column = f"`{cursor.fetchone()[0]}`"
+            self.logger.info("Saved primary key column to Redis")
+
+            # Get max PK
+            cursor.execute('''
+                SELECT MAX(%s) FROM %s.%s
+            ''' % (metadata.pk_column, metadata.source_db, metadata.source_table))
+            max_pk = cursor.fetchone()[0]
+            if max_pk is None:
+                raise Exception("No data in source table")
+            metadata.max_pk = max_pk
             self.logger.info("Saved total rows to Redis")
 
         metadata.start_datetime = datetime.now()
-        redis_data.set_current_stage(Stage.START_EVENT_HANDLER)
+        if not config.DISABLE_EVENTHANDLER:
+            redis_data.set_current_stage(Stage.START_EVENT_HANDLER)
+        else:
+            redis_data.set_current_stage(Stage.BULK_IMPORT_CHUNK_CREATION)
 
     def init_migration(self):
         if not self.check_database_setup():
