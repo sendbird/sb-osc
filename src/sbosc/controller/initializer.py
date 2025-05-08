@@ -185,16 +185,6 @@ class Initializer:
             metadata.pk_column = f"`{cursor.fetchone()[0]}`"
             self.logger.info("Saved primary key column to Redis")
 
-            # Get max PK
-            cursor.execute('''
-                SELECT MAX(%s) FROM %s.%s
-            ''' % (metadata.pk_column, metadata.source_db, metadata.source_table))
-            max_pk = cursor.fetchone()[0]
-            if max_pk is None:
-                raise Exception("No data in source table")
-            metadata.max_pk = max_pk
-            self.logger.info("Saved total rows to Redis")
-
         metadata.start_datetime = datetime.now()
         if not config.DISABLE_EVENTHANDLER:
             redis_data.set_current_stage(Stage.START_EVENT_HANDLER)
