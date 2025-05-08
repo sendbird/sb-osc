@@ -104,7 +104,8 @@ def test_chunk_creation(controller, setup_table, redis_data):
 
 @pytest.mark.parametrize('setup_table', ['with_data'], indirect=True)
 @pytest.mark.parametrize('controller', ['object'], indirect=True)
-def test_bulk_import_validation(controller: Controller, setup_table, cursor, override_operation_class):
+def test_bulk_import_validation(controller: Controller, setup_table, cursor, override_operation_class, redis_data):
+    redis_data.metadata.max_pk = TABLE_SIZE
     assert controller.validator.bulk_import_validation()
     delete_pks = random.sample(range(1, TABLE_SIZE), 10)
     cursor.execute(f'''
