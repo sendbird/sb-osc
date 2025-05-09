@@ -61,8 +61,17 @@ class Controller(SBOSCComponent):
         # Remove old chunks
         self.redis_data.remove_all_chunks()
 
+        # Get max pk
         metadata = self.redis_data.metadata
-        max_pk = metadata.max_pk
+        with self.db.cursor(role="reader") as cursor:
+            cursor.execute('''
+                  SELECT MIN(%s), MAX(%s) FROM %s.%s
+              ''' % (metadata.pk_column, metadata.pk_column, metadata.source_db, metadata.source_table))
+            max_pk = cursor.fetchone()[0]
+            if max_pk is None:
+                raise Exception("No data in source table")
+            metadata.max_pk = max_pk
+        self.logger.info("Saved total rows to Redis")
 
         # chunk_count is determined by min_chunk_size and max_chunk_count
         # Each chunk will have min_chunk_size rows and the number of chunks should not exceed max_chunk_count
