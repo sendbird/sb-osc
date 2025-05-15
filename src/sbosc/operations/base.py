@@ -280,7 +280,7 @@ class CrossClusterBaseOperation(MigrationOperation):
             dest_df = dest_df.astype(source_df.dtypes.to_dict())
             merged_df = source_df.merge(dest_df, how='inner', on=source_df.columns.tolist(), indicator=True)
             rematched_pks = set(merged_df[merged_df['_merge'] == 'both'][self.pk_column.strip('`')].tolist())
-        except pd.errors.IntCastingNaNError:
+        except (pd.errors.IntCastingNaNError, TypeError):
             rematched_pks = set()
         # add deleted pks
         with db.cursor(host='source', role='reader') as cursor:
