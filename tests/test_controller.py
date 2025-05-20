@@ -127,7 +127,9 @@ def test_bulk_import_validation(controller: Controller, setup_table, cursor, ove
 def test_add_index(controller: Controller, setup_table, cursor, case):
     cursor.execute(f'''
         ALTER TABLE {config.DESTINATION_DB}.{config.DESTINATION_TABLE}
-        MODIFY COLUMN A VARCHAR(128), MODIFY COLUMN B VARCHAR(128), MODIFY COLUMN C VARCHAR(128)
+        MODIFY COLUMN A VARCHAR(128), MODIFY COLUMN B VARCHAR(128), MODIFY COLUMN C VARCHAR(128),
+        ADD COLUMN `key` VARCHAR(128) default NULL,
+        ADD COLUMN value VARCHAR(128) default NULL
     ''')
 
     config.INDEXES = [
@@ -136,7 +138,9 @@ def test_add_index(controller: Controller, setup_table, cursor, case):
         IndexConfig('idx_3', 'C'),
         IndexConfig('idx_4', 'A,B'),
         IndexConfig('idx_5', 'A,C'),
-        IndexConfig('idx_6', 'B,C')
+        IndexConfig('idx_6', 'B,C'),
+        IndexConfig('idx_7', 'key'),
+        IndexConfig('idx_8', '`value`  '),
     ]
 
     cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.index_creation_status")
