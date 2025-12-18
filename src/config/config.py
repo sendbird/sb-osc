@@ -44,6 +44,9 @@ class IndexConfig:
     columns: str
     unique: bool = False
 
+    def __post_init__(self):
+        self.columns = ','.join([f"`{col.strip('` ')}`"for col in self.columns.split(',')])
+
 
 class Config:
     # Migration plan
