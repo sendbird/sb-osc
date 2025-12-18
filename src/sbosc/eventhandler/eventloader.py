@@ -122,10 +122,6 @@ class EventLoader:
                 if max_event_count > config.PK_SET_MAX_SIZE:
                     self.batch_duration //= 2
                     self.logger.warning(f"Batch is too large, reducing duration to {self.batch_duration} seconds")
-                elif max_event_count == 0:
-                    self.batch_duration *= 2
-                    self.logger.warning(
-                        f"No events found in timestamp range, Batch duration increased to {self.batch_duration}")
                 else:
                     found_end_timestamp = True
 
@@ -200,16 +196,22 @@ class EventLoader:
                 time.sleep(10)
                 return
 
-            updated_pks, removed_pks, max_timestamp = self.get_pk_batch(start_timestamp, next_timestamp)
+            updated_pks, removed_pks, max_timestamp_in_batch = self.get_pk_batch(start_timestamp, next_timestamp)
             updated_pk_set.add(updated_pks - removed_pks)
             updated_pk_set.remove(removed_pks)
             removed_pk_set.add(removed_pks)
+
             # Save last loaded event timestamp
+            if max_timestamp_in_batch == start_timestamp and max_timestamp > start_timestamp:
+                last_loaded_timestamp = next_timestamp
+            else:
+                last_loaded_timestamp = max_timestamp_in_batch
+
             with self.db.cursor() as cursor:
                 cursor: Cursor
                 cursor.execute(f'''
                     INSERT INTO {config.SBOSC_DB}.apply_dml_events_status
                     (migration_id, last_loaded_timestamp, created_at) VALUES (%s, %s, NOW())
-                ''', (self.migration_id, max_timestamp))
-                self.last_loaded_timestamp = max_timestamp
+                ''', (self.migration_id, last_loaded_timestamp))
+                self.last_loaded_timestamp = last_loaded_timestamp
                 self.logger.info(f"Loaded events from database. Last loaded timestamp: {self.last_loaded_timestamp}")

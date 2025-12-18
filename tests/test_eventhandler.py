@@ -93,6 +93,211 @@ def test_event_handler(event_handler, cursor, redis_data: RedisData):
     assert set(redis_data.removed_pk_set.get(1)) == {'1'}
 
 
+def test_eventloader_empty_range_jump(cursor, redis_data: RedisData):
+    """
+    Test that EventLoader jumps to next_timestamp when current batch is empty
+    but events exist further ahead.
+
+    Scenario:
+    - start_timestamp = 3000, batch_duration = 3600
+    - Event at timestamp 3000 (start)
+    - No events between 3001-9999
+    - Event at timestamp 10000
+
+    Expected: EventLoader should jump to next_timestamp (6600) instead of staying at 3000
+    """
+    from sbosc.eventhandler.eventloader import EventLoader
+    from unittest.mock import MagicMock
+
+    # Setup: Clear tables
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.apply_dml_events_status")
+    for table in ['inserted_pk_1', 'updated_pk_1', 'deleted_pk_1']:
+        cursor.execute(f'TRUNCATE TABLE {config.SBOSC_DB}.{table}')
+    redis_data.updated_pk_set.delete()
+    redis_data.removed_pk_set.delete()
+
+    # Insert events with a gap
+    # Event at timestamp 3000
+    cursor.execute(
+        f"INSERT INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (1, 3000)"
+    )
+    # Event at timestamp 10000 (big gap)
+    cursor.execute(
+        f"INSERT INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (2, 10000)"
+    )
+
+    # Create EventLoader with mocked event_handler
+    mock_event_handler = MagicMock()
+    mock_event_handler.migration_id = 1
+    mock_event_handler.logger = MagicMock()
+
+    event_loader = EventLoader(mock_event_handler)
+    event_loader.batch_duration = 3600  # 1 hour
+
+    # First load: should load event at 3000
+    event_loader.load_events_from_db()
+
+    # Verify: PK 1 should be in updated_pk_set
+    assert '1' in redis_data.updated_pk_set.get(10)
+
+    # Check last_loaded_timestamp: should jump to next_timestamp (3000 + 3600 = 6600)
+    # because max_timestamp_in_batch == start_timestamp (3000) AND max_timestamp > start_timestamp (10000 > 3000)
+    cursor.execute(
+        f"SELECT last_loaded_timestamp FROM {config.SBOSC_DB}.apply_dml_events_status "
+        f"WHERE migration_id = 1 ORDER BY id DESC LIMIT 1"
+    )
+    last_loaded = cursor.fetchone()[0]
+    assert last_loaded == 6600, f"Expected jump to 6600, but got {last_loaded}"
+
+    # Second load: should start from 6600, range [6600, 10200] includes event at 10000
+    redis_data.updated_pk_set.delete()
+    event_loader.load_events_from_db()
+
+    # Event at 10000 is within range [6600, 10200], so it gets loaded
+    assert '2' in redis_data.updated_pk_set.get(10)
+
+    cursor.execute(
+        f"SELECT last_loaded_timestamp FROM {config.SBOSC_DB}.apply_dml_events_status "
+        f"WHERE migration_id = 1 ORDER BY id DESC LIMIT 1"
+    )
+    last_loaded = cursor.fetchone()[0]
+    # max_timestamp_in_batch = 10000, which is > start_timestamp (6600), so normal progression
+    assert last_loaded == 10000, f"Expected 10000, but got {last_loaded}"
+
+
+def test_eventloader_retry_same_range_when_no_future_events(cursor, redis_data: RedisData):
+    """
+    Test that EventLoader retries same range when no events exist beyond current timestamp.
+
+    Scenario:
+    - Event only at timestamp 5000
+    - No events after 5000
+
+    Expected: EventLoader should stay at 5000, waiting for new events
+    """
+    from sbosc.eventhandler.eventloader import EventLoader
+    from unittest.mock import MagicMock
+
+    # Setup: Clear tables
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.apply_dml_events_status")
+    for table in ['inserted_pk_1', 'updated_pk_1', 'deleted_pk_1']:
+        cursor.execute(f'TRUNCATE TABLE {config.SBOSC_DB}.{table}')
+    redis_data.updated_pk_set.delete()
+    redis_data.removed_pk_set.delete()
+
+    # Insert single event
+    cursor.execute(
+        f"INSERT INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (1, 5000)"
+    )
+
+    # Create EventLoader
+    mock_event_handler = MagicMock()
+    mock_event_handler.migration_id = 1
+    mock_event_handler.logger = MagicMock()
+
+    event_loader = EventLoader(mock_event_handler)
+    event_loader.batch_duration = 3600
+
+    # First load
+    event_loader.load_events_from_db()
+
+    # Verify: should NOT jump, should stay at 5000
+    # because max_timestamp_in_batch == start_timestamp (5000) AND max_timestamp == start_timestamp (5000)
+    cursor.execute(
+        f"SELECT last_loaded_timestamp FROM {config.SBOSC_DB}.apply_dml_events_status "
+        f"WHERE migration_id = 1 ORDER BY id DESC LIMIT 1"
+    )
+    last_loaded = cursor.fetchone()[0]
+    assert last_loaded == 5000, f"Expected to stay at 5000, but got {last_loaded}"
+
+    # Second load: should still stay at 5000
+    redis_data.updated_pk_set.delete()
+    event_loader.load_events_from_db()
+
+    cursor.execute(
+        f"SELECT last_loaded_timestamp FROM {config.SBOSC_DB}.apply_dml_events_status "
+        f"WHERE migration_id = 1 ORDER BY id DESC LIMIT 1"
+    )
+    last_loaded = cursor.fetchone()[0]
+    assert last_loaded == 5000, f"Expected to stay at 5000, but got {last_loaded}"
+
+    # Now add a new event at timestamp 8000
+    cursor.execute(
+        f"INSERT INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (2, 8000)"
+    )
+
+    # Third load: range [5000, 8600] now includes event at 8000
+    redis_data.updated_pk_set.delete()
+    event_loader.load_events_from_db()
+
+    # Event at 8000 is within range [5000, 8600], so it gets loaded
+    assert '2' in redis_data.updated_pk_set.get(10)
+
+    cursor.execute(
+        f"SELECT last_loaded_timestamp FROM {config.SBOSC_DB}.apply_dml_events_status "
+        f"WHERE migration_id = 1 ORDER BY id DESC LIMIT 1"
+    )
+    last_loaded = cursor.fetchone()[0]
+    # max_timestamp_in_batch = 8000, which is > start_timestamp (5000), so normal progression
+    assert last_loaded == 8000, f"Expected 8000, but got {last_loaded}"
+
+
+def test_eventloader_normal_progression(cursor, redis_data: RedisData):
+    """
+    Test normal EventLoader progression when events exist within the batch range.
+
+    Scenario:
+    - Events at timestamps 3000, 4000, 5000
+    - batch_duration = 3600
+
+    Expected: EventLoader should progress to max_timestamp_in_batch (5000)
+    """
+    from sbosc.eventhandler.eventloader import EventLoader
+    from unittest.mock import MagicMock
+
+    # Setup: Clear tables
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.apply_dml_events_status")
+    for table in ['inserted_pk_1', 'updated_pk_1', 'deleted_pk_1']:
+        cursor.execute(f'TRUNCATE TABLE {config.SBOSC_DB}.{table}')
+    redis_data.updated_pk_set.delete()
+    redis_data.removed_pk_set.delete()
+
+    # Insert multiple events within batch range
+    cursor.execute(
+        f"INSERT INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (1, 3000)"
+    )
+    cursor.execute(
+        f"INSERT INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (2, 4000)"
+    )
+    cursor.execute(
+        f"INSERT INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (3, 5000)"
+    )
+
+    # Create EventLoader
+    mock_event_handler = MagicMock()
+    mock_event_handler.migration_id = 1
+    mock_event_handler.logger = MagicMock()
+
+    event_loader = EventLoader(mock_event_handler)
+    event_loader.batch_duration = 3600
+
+    # Load events
+    event_loader.load_events_from_db()
+
+    # Verify: all PKs should be loaded
+    pks = redis_data.updated_pk_set.get(10)
+    assert '1' in pks and '2' in pks and '3' in pks
+
+    # Verify: last_loaded_timestamp should be max_timestamp_in_batch (5000)
+    # NOT next_timestamp, because max_timestamp_in_batch (5000) > start_timestamp (3000)
+    cursor.execute(
+        f"SELECT last_loaded_timestamp FROM {config.SBOSC_DB}.apply_dml_events_status "
+        f"WHERE migration_id = 1 ORDER BY id DESC LIMIT 1"
+    )
+    last_loaded = cursor.fetchone()[0]
+    assert last_loaded == 5000, f"Expected 5000, but got {last_loaded}"
+
+
 def test_event_handler_save_to_database(event_handler, cursor, redis_data):
     time.sleep(100)
 
