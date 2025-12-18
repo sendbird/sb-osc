@@ -1,6 +1,7 @@
 import random
 import threading
 import time
+from datetime import datetime
 from threading import Thread
 
 import numpy as np
@@ -11,6 +12,7 @@ from config import config
 from config.config import IndexConfig
 from sbosc.const import Stage, ChunkStatus
 from sbosc.controller import Controller
+from modules.redis import RedisData
 
 TABLE_SIZE = 10000
 
