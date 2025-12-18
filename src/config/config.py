@@ -44,6 +44,9 @@ class IndexConfig:
     columns: str
     unique: bool = False
 
+    def __post_init__(self):
+        self.columns = ','.join([f"`{col.strip('` ')}`"for col in self.columns.split(',')])
+
 
 class Config:
     # Migration plan
@@ -98,10 +101,12 @@ class Config:
 
     # Validation config
     BULK_IMPORT_VALIDATION_BATCH_SIZE = 10000
+    BULK_IMPORT_VALIDATION_CHUNK_SIZE = 1000000
     APPLY_DML_EVENTS_VALIDATION_BATCH_SIZE = 1000
     VALIDATION_THREAD_COUNT = 4
     APPLY_DML_EVENTS_VALIDATION_INTERVAL_IN_SECONDS = 10
     FULL_DML_EVENT_VALIDATION_INTERVAL_IN_HOURS = 0
+    FULL_DML_EVENT_VALIDATION_CHUNK_DURATION_IN_HOURS = 1
 
     # EventLoader config
     PK_SET_MAX_SIZE = 100000

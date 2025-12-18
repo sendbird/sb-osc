@@ -29,9 +29,12 @@ def setup_table(sqlalchemy_engine, cursor, request):
         df = pd.DataFrame(np.random.choice(['a', 'b', 'c'], size=(TABLE_SIZE, 3)), columns=['A', 'B', 'C'])
         df['id'] = range(1, 1 + len(df))
         df.to_sql(config.SOURCE_TABLE, sqlalchemy_engine, if_exists='replace', index=False, schema=config.SOURCE_DB)
-        df.to_sql(config.DESTINATION_TABLE, sqlalchemy_engine, if_exists='replace', index=False, schema=config.DESTINATION_DB)
-        cursor.execute(f"ALTER TABLE {config.SOURCE_DB}.{config.SOURCE_TABLE} MODIFY COLUMN id int AUTO_INCREMENT PRIMARY KEY")
-        cursor.execute(f"ALTER TABLE {config.DESTINATION_DB}.{config.DESTINATION_TABLE} MODIFY COLUMN id int AUTO_INCREMENT PRIMARY KEY")
+        df.to_sql(config.DESTINATION_TABLE, sqlalchemy_engine, if_exists='replace', index=False,
+                  schema=config.DESTINATION_DB)
+        cursor.execute(
+            f"ALTER TABLE {config.SOURCE_DB}.{config.SOURCE_TABLE} MODIFY COLUMN id int AUTO_INCREMENT PRIMARY KEY")
+        cursor.execute(
+            f"ALTER TABLE {config.DESTINATION_DB}.{config.DESTINATION_TABLE} MODIFY COLUMN id int AUTO_INCREMENT PRIMARY KEY")
     else:
         cursor.execute(f'''
             CREATE TABLE {config.SOURCE_DB}.{config.SOURCE_TABLE} (
@@ -39,7 +42,8 @@ def setup_table(sqlalchemy_engine, cursor, request):
                 A CHAR(1), B CHAR(1), C CHAR(1)
             )
         ''')
-        cursor.execute(f"INSERT INTO {config.SOURCE_DB}.{config.SOURCE_TABLE} (id, A, B, C) VALUES ({TABLE_SIZE}, 'a', 'b', 'c')")
+        cursor.execute(
+            f"INSERT INTO {config.SOURCE_DB}.{config.SOURCE_TABLE} (id, A, B, C) VALUES ({TABLE_SIZE}, 'a', 'b', 'c')")
 
 
 @pytest.fixture
@@ -105,6 +109,9 @@ def test_chunk_creation(controller, setup_table, redis_data):
 @pytest.mark.parametrize('setup_table', ['with_data'], indirect=True)
 @pytest.mark.parametrize('controller', ['object'], indirect=True)
 def test_bulk_import_validation(controller: Controller, setup_table, cursor, override_operation_class, redis_data):
+    # Clean up checkpoint table before test
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.bulk_import_validation_status")
+
     redis_data.metadata.max_pk = TABLE_SIZE
     assert controller.validator.bulk_import_validation()
     delete_pks = random.sample(range(1, TABLE_SIZE), 10)
@@ -112,13 +119,156 @@ def test_bulk_import_validation(controller: Controller, setup_table, cursor, ove
         DELETE FROM {config.SOURCE_DB}.{config.SOURCE_TABLE}
         WHERE id IN ({','.join([str(i) for i in delete_pks[:5]])})
     ''')
+
+    # Clean up checkpoint for re-validation
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.bulk_import_validation_status")
     assert controller.validator.bulk_import_validation()
     controller.validator.stop_flag = False
+
+    # Clean up checkpoint for re-validation
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.bulk_import_validation_status")
     cursor.execute(f'''
         DELETE FROM {config.DESTINATION_DB}.{config.DESTINATION_TABLE}
         WHERE id IN ({','.join([str(i) for i in delete_pks])})
     ''')
     assert not controller.validator.bulk_import_validation()
+
+    # Clean up
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.bulk_import_validation_status")
+
+
+@pytest.mark.parametrize('setup_table', ['with_data'], indirect=True)
+@pytest.mark.parametrize('controller', ['object'], indirect=True)
+def test_bulk_import_validation_checkpoint_save(controller: Controller, setup_table, cursor, override_operation_class,
+                                                redis_data):
+    """Test that checkpoints are saved to DB after each chunk validation"""
+    # Clean up
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.bulk_import_validation_status")
+
+    # Set small chunk size for testing (smaller than TABLE_SIZE to create multiple chunks)
+    original_chunk_size = controller.validator.bulk_import_chunk_size
+    controller.validator.bulk_import_chunk_size = TABLE_SIZE // 3  # Create ~3 chunks
+
+    redis_data.metadata.max_pk = TABLE_SIZE
+    assert controller.validator.bulk_import_validation()
+
+    # Verify checkpoints were saved
+    cursor.execute(f'''
+        SELECT COUNT(1) FROM {config.SBOSC_DB}.bulk_import_validation_status
+        WHERE migration_id = {controller.migration_id} AND is_valid = TRUE
+    ''')
+    checkpoint_count = cursor.fetchone()[0]
+    assert checkpoint_count >= 3  # At least 3 chunks should be checkpointed
+
+    # Verify checkpoint order
+    cursor.execute(f'''
+        SELECT chunk_end_pk FROM {config.SBOSC_DB}.bulk_import_validation_status
+        WHERE migration_id = {controller.migration_id} AND is_valid = TRUE
+        ORDER BY id ASC
+    ''')
+    chunk_end_pks = [row[0] for row in cursor.fetchall()]
+    assert chunk_end_pks[-1] >= TABLE_SIZE  # Last checkpoint should cover max_pk
+
+    # Restore original chunk size and clean up
+    controller.validator.bulk_import_chunk_size = original_chunk_size
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.bulk_import_validation_status")
+
+
+@pytest.mark.parametrize('setup_table', ['with_data'], indirect=True)
+@pytest.mark.parametrize('controller', ['object'], indirect=True)
+def test_bulk_import_validation_resume_from_checkpoint(controller: Controller, setup_table, cursor,
+                                                       override_operation_class, redis_data):
+    """Test that validation resumes from last checkpoint"""
+    # Clean up
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.bulk_import_validation_status")
+
+    # Set small chunk size for testing
+    original_chunk_size = controller.validator.bulk_import_chunk_size
+    controller.validator.bulk_import_chunk_size = TABLE_SIZE // 3
+
+    redis_data.metadata.max_pk = TABLE_SIZE
+
+    # Insert a fake checkpoint (simulate partial completion)
+    first_chunk_end = controller.validator.bulk_import_chunk_size - 1
+    cursor.execute(f'''
+        INSERT INTO {config.SBOSC_DB}.bulk_import_validation_status
+        (migration_id, chunk_end_pk, is_valid, created_at)
+        VALUES ({controller.migration_id}, {first_chunk_end}, TRUE, NOW())
+    ''')
+
+    # Run validation - should resume from checkpoint
+    assert controller.validator.bulk_import_validation()
+
+    # Verify new checkpoints were added after the existing one
+    cursor.execute(f'''
+        SELECT chunk_end_pk FROM {config.SBOSC_DB}.bulk_import_validation_status
+        WHERE migration_id = {controller.migration_id} AND is_valid = TRUE
+        ORDER BY id ASC
+    ''')
+    chunk_end_pks = [row[0] for row in cursor.fetchall()]
+
+    # First checkpoint should be our manually inserted one
+    assert chunk_end_pks[0] == first_chunk_end
+    # Should have more checkpoints added after
+    assert len(chunk_end_pks) >= 2
+
+    # Restore original chunk size and clean up
+    controller.validator.bulk_import_chunk_size = original_chunk_size
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.bulk_import_validation_status")
+
+
+@pytest.mark.parametrize('setup_table', ['with_data'], indirect=True)
+@pytest.mark.parametrize('controller', ['object'], indirect=True)
+def test_bulk_import_validation_failure_checkpoint(controller: Controller, setup_table, cursor,
+                                                   override_operation_class, redis_data):
+    """Test that checkpoint is saved even when validation fails"""
+    # Clean up
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.bulk_import_validation_status")
+
+    # Set small chunk size for testing
+    original_chunk_size = controller.validator.bulk_import_chunk_size
+    controller.validator.bulk_import_chunk_size = TABLE_SIZE // 2  # 2 chunks
+
+    redis_data.metadata.max_pk = TABLE_SIZE
+
+    # Delete some rows from destination to cause validation failure in second chunk
+    # Delete rows in the second half (second chunk)
+    second_chunk_start = TABLE_SIZE // 2
+    cursor.execute(f'''
+        DELETE FROM {config.DESTINATION_DB}.{config.DESTINATION_TABLE}
+        WHERE id > {second_chunk_start} LIMIT 5
+    ''')
+
+    # Run validation - should fail but save checkpoint for failed chunk
+    result = controller.validator.bulk_import_validation()
+
+    # Check if checkpoint was saved (with is_valid = FALSE for failed chunk)
+    cursor.execute(f'''
+        SELECT chunk_end_pk, is_valid FROM {config.SBOSC_DB}.bulk_import_validation_status
+        WHERE migration_id = {controller.migration_id}
+        ORDER BY id ASC
+    ''')
+    checkpoints = cursor.fetchall()
+
+    # Should have at least one checkpoint
+    assert len(checkpoints) >= 1
+
+    # If validation failed, last checkpoint should have is_valid = FALSE
+    if not result:
+        last_checkpoint = checkpoints[-1]
+        assert last_checkpoint[1] == 0  # is_valid = FALSE
+
+    # Restore original chunk size and clean up
+    controller.validator.bulk_import_chunk_size = original_chunk_size
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.bulk_import_validation_status")
+
+    # Restore deleted rows for other tests
+    cursor.execute(f'''
+        INSERT INTO {config.DESTINATION_DB}.{config.DESTINATION_TABLE} (id, A, B, C)
+        SELECT id, A, B, C FROM {config.SOURCE_DB}.{config.SOURCE_TABLE}
+        WHERE id > {second_chunk_start}
+        ON DUPLICATE KEY UPDATE A=VALUES(A), B=VALUES(B), C=VALUES(C)
+    ''')
 
 
 @pytest.mark.parametrize('setup_table', ['with_data'], indirect=True)
@@ -127,7 +277,9 @@ def test_bulk_import_validation(controller: Controller, setup_table, cursor, ove
 def test_add_index(controller: Controller, setup_table, cursor, case):
     cursor.execute(f'''
         ALTER TABLE {config.DESTINATION_DB}.{config.DESTINATION_TABLE}
-        MODIFY COLUMN A VARCHAR(128), MODIFY COLUMN B VARCHAR(128), MODIFY COLUMN C VARCHAR(128)
+        MODIFY COLUMN A VARCHAR(128), MODIFY COLUMN B VARCHAR(128), MODIFY COLUMN C VARCHAR(128),
+        ADD COLUMN `key` VARCHAR(128) default NULL,
+        ADD COLUMN value VARCHAR(128) default NULL
     ''')
 
     config.INDEXES = [
@@ -136,7 +288,9 @@ def test_add_index(controller: Controller, setup_table, cursor, case):
         IndexConfig('idx_3', 'C'),
         IndexConfig('idx_4', 'A,B'),
         IndexConfig('idx_5', 'A,C'),
-        IndexConfig('idx_6', 'B,C')
+        IndexConfig('idx_6', 'B,C'),
+        IndexConfig('idx_7', 'key'),
+        IndexConfig('idx_8', '`value`  '),
     ]
 
     cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.index_creation_status")
@@ -318,6 +472,216 @@ def test_apply_dml_events_validation(controller: Controller, setup_table, redis_
     cursor.execute("TRUNCATE TABLE unmatched_rows")
     cursor.execute("TRUNCATE TABLE apply_dml_events_validation_status")
     cursor.execute("TRUNCATE TABLE full_dml_event_validation_status")
+
+
+@pytest.mark.parametrize('setup_table', ['with_data'], indirect=True)
+@pytest.mark.parametrize('controller', ['object'], indirect=True)
+def test_full_dml_event_validation_checkpoint_save(controller: Controller, setup_table, cursor, redis_data,
+                                                   override_operation_class):
+    """Test that checkpoints are saved with target_end_timestamp after each chunk"""
+    # Setup
+    controller.initializer.fetch_metadata(redis_data)
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.full_dml_event_validation_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.inserted_pk_1")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.updated_pk_1")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.deleted_pk_1")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.unmatched_rows")
+
+    # Insert events spanning multiple chunks
+    start_ts = 1000
+    end_ts = 10000
+    events = [(i, start_ts + (i % (end_ts - start_ts))) for i in range(1, 100)]
+    cursor.executemany(f'''
+        INSERT IGNORE INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
+    ''', events)
+    cursor.execute(f'''
+        INSERT INTO {config.SBOSC_DB}.event_handler_status (migration_id, log_file, log_pos, last_event_timestamp, created_at)
+        VALUES (1, 'mysql-bin.000001', 4, {end_ts}, NOW())
+    ''')
+
+    # Set small chunk duration for testing
+    original_chunk_duration = controller.validator.full_dml_event_validation_chunk_duration
+    controller.validator.full_dml_event_validation_chunk_duration = 2000  # 2000 seconds per chunk
+
+    # Run validation
+    result = controller.validator.full_dml_event_validation()
+    assert result == True
+
+    # Verify checkpoints were saved with target_end_timestamp
+    cursor.execute(f'''
+        SELECT target_end_timestamp, last_validated_timestamp, is_valid
+        FROM {config.SBOSC_DB}.full_dml_event_validation_status
+        WHERE migration_id = {controller.migration_id}
+        ORDER BY id ASC
+    ''')
+    checkpoints = cursor.fetchall()
+
+    assert len(checkpoints) >= 1
+    # All checkpoints should have same target_end_timestamp
+    target_end = checkpoints[0][0]
+    for cp in checkpoints:
+        assert cp[0] == target_end  # target_end_timestamp should be same for all chunks
+    # Last checkpoint's last_validated_timestamp should equal target_end_timestamp
+    assert checkpoints[-1][1] == target_end
+
+    # Clean up
+    controller.validator.full_dml_event_validation_chunk_duration = original_chunk_duration
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.full_dml_event_validation_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.inserted_pk_1")
+
+
+@pytest.mark.parametrize('setup_table', ['with_data'], indirect=True)
+@pytest.mark.parametrize('controller', ['object'], indirect=True)
+def test_full_dml_event_validation_resume_from_checkpoint(controller: Controller, setup_table, cursor, redis_data,
+                                                          override_operation_class):
+    """Test that validation resumes from last checkpoint when last_validated_timestamp < target_end_timestamp"""
+    # Setup
+    controller.initializer.fetch_metadata(redis_data)
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.full_dml_event_validation_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.inserted_pk_1")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.unmatched_rows")
+
+    start_ts = 1000
+    end_ts = 5000
+    events = [(i, start_ts + (i * 10)) for i in range(1, 100)]
+    cursor.executemany(f'''
+        INSERT IGNORE INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
+    ''', events)
+    cursor.execute(f'''
+        INSERT INTO {config.SBOSC_DB}.event_handler_status (migration_id, log_file, log_pos, last_event_timestamp, created_at)
+        VALUES (1, 'mysql-bin.000001', 4, {end_ts}, NOW())
+    ''')
+
+    # Insert incomplete checkpoint (last_validated_timestamp < target_end_timestamp)
+    incomplete_validated_ts = 3000
+    cursor.execute(f'''
+        INSERT INTO {config.SBOSC_DB}.full_dml_event_validation_status
+        (migration_id, target_end_timestamp, last_validated_timestamp, is_valid, created_at)
+        VALUES ({controller.migration_id}, {end_ts}, {incomplete_validated_ts}, TRUE, NOW())
+    ''')
+
+    # Run validation - should resume from incomplete_validated_ts + 1
+    result = controller.validator.full_dml_event_validation()
+    assert result == True
+
+    # Verify new checkpoints were added
+    cursor.execute(f'''
+        SELECT target_end_timestamp, last_validated_timestamp
+        FROM {config.SBOSC_DB}.full_dml_event_validation_status
+        WHERE migration_id = {controller.migration_id}
+        ORDER BY id ASC
+    ''')
+    checkpoints = cursor.fetchall()
+
+    # First checkpoint is our manually inserted incomplete one
+    assert checkpoints[0][1] == incomplete_validated_ts
+    # New checkpoints should have been added
+    assert len(checkpoints) >= 2
+    # Last checkpoint should complete the validation
+    assert checkpoints[-1][1] == end_ts
+
+    # Clean up
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.full_dml_event_validation_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.inserted_pk_1")
+
+
+@pytest.mark.parametrize('setup_table', ['with_data'], indirect=True)
+@pytest.mark.parametrize('controller', ['object'], indirect=True)
+def test_full_dml_event_validation_skip_within_interval(controller: Controller, setup_table, cursor, redis_data,
+                                                        override_operation_class):
+    """Test that validation is skipped when within interval and already completed"""
+    # Setup
+    controller.initializer.fetch_metadata(redis_data)
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.full_dml_event_validation_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.inserted_pk_1")
+
+    end_ts = 5000
+    cursor.execute(f'''
+        INSERT INTO {config.SBOSC_DB}.event_handler_status (migration_id, log_file, log_pos, last_event_timestamp, created_at)
+        VALUES (1, 'mysql-bin.000001', 4, {end_ts}, NOW())
+    ''')
+
+    # Insert completed checkpoint (last_validated_timestamp == target_end_timestamp, recent created_at)
+    cursor.execute(f'''
+        INSERT INTO {config.SBOSC_DB}.full_dml_event_validation_status
+        (migration_id, target_end_timestamp, last_validated_timestamp, is_valid, created_at)
+        VALUES ({controller.migration_id}, {end_ts}, {end_ts}, TRUE, NOW())
+    ''')
+
+    # Run validation - should skip because completed recently
+    result = controller.validator.full_dml_event_validation()
+    assert result == False  # False means skipped
+
+    # Verify no new checkpoints were added
+    cursor.execute(f'''
+        SELECT COUNT(1) FROM {config.SBOSC_DB}.full_dml_event_validation_status
+        WHERE migration_id = {controller.migration_id}
+    ''')
+    assert cursor.fetchone()[0] == 1  # Only our manually inserted checkpoint
+
+    # Clean up
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.full_dml_event_validation_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
+
+
+@pytest.mark.parametrize('setup_table', ['with_data'], indirect=True)
+@pytest.mark.parametrize('controller', ['object'], indirect=True)
+def test_full_dml_event_validation_new_run_after_interval(controller: Controller, setup_table, cursor, redis_data,
+                                                          override_operation_class):
+    """Test that new validation starts when interval has passed"""
+    # Setup
+    controller.initializer.fetch_metadata(redis_data)
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.full_dml_event_validation_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.inserted_pk_1")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.unmatched_rows")
+
+    old_end_ts = 3000
+    new_end_ts = 8000
+    events = [(i, 1000 + (i * 10)) for i in range(1, 100)]
+    cursor.executemany(f'''
+        INSERT IGNORE INTO {config.SBOSC_DB}.inserted_pk_1 (source_pk, event_timestamp) VALUES (%s, %s)
+    ''', events)
+    cursor.execute(f'''
+        INSERT INTO {config.SBOSC_DB}.event_handler_status (migration_id, log_file, log_pos, last_event_timestamp, created_at)
+        VALUES (1, 'mysql-bin.000001', 4, {new_end_ts}, NOW())
+    ''')
+
+    # Insert old completed checkpoint (created_at is old, simulating interval passed)
+    cursor.execute(f'''
+        INSERT INTO {config.SBOSC_DB}.full_dml_event_validation_status
+        (migration_id, target_end_timestamp, last_validated_timestamp, is_valid, created_at)
+        VALUES ({controller.migration_id}, {old_end_ts}, {old_end_ts}, TRUE, DATE_SUB(NOW(), INTERVAL 2 HOUR))
+    ''')
+
+    # Run validation - should start new validation because interval passed
+    result = controller.validator.full_dml_event_validation()
+    assert result == True
+
+    # Verify new checkpoints were added with new target_end_timestamp
+    cursor.execute(f'''
+        SELECT target_end_timestamp, last_validated_timestamp
+        FROM {config.SBOSC_DB}.full_dml_event_validation_status
+        WHERE migration_id = {controller.migration_id}
+        ORDER BY id ASC
+    ''')
+    checkpoints = cursor.fetchall()
+
+    # First is old checkpoint
+    assert checkpoints[0][0] == old_end_ts
+    # New checkpoints should have new_end_ts as target
+    assert len(checkpoints) >= 2
+    assert checkpoints[-1][0] == new_end_ts
+
+    # Clean up
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.full_dml_event_validation_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.event_handler_status")
+    cursor.execute(f"TRUNCATE TABLE {config.SBOSC_DB}.inserted_pk_1")
 
 
 @pytest.mark.parametrize('setup_table', ['with_data'], indirect=True)

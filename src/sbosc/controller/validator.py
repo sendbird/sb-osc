@@ -23,8 +23,10 @@ class DataValidator:
     def __init__(self, controller: 'Controller'):
         self.migration_id = controller.migration_id
         self.bulk_import_batch_size = config.BULK_IMPORT_VALIDATION_BATCH_SIZE
+        self.bulk_import_chunk_size = config.BULK_IMPORT_VALIDATION_CHUNK_SIZE
         self.apply_dml_events_batch_size = config.APPLY_DML_EVENTS_VALIDATION_BATCH_SIZE
         self.full_dml_event_validation_interval = config.FULL_DML_EVENT_VALIDATION_INTERVAL_IN_HOURS
+        self.full_dml_event_validation_chunk_duration = config.FULL_DML_EVENT_VALIDATION_CHUNK_DURATION_IN_HOURS * 3600
         self.thread_count = config.VALIDATION_THREAD_COUNT
         self.db = Database()
         self.redis_data = RedisData(self.migration_id)
@@ -38,6 +40,30 @@ class DataValidator:
 
     def set_stop_flag(self):
         self.stop_flag = True
+
+    def __get_bulk_import_last_validated_pk(self) -> int:
+        """Get the last successfully validated PK from checkpoint table"""
+        with self.db.cursor(role='reader') as cursor:
+            cursor: Cursor
+            cursor.execute(f'''
+                SELECT chunk_end_pk FROM {config.SBOSC_DB}.bulk_import_validation_status
+                WHERE migration_id = {self.migration_id} AND is_valid = TRUE
+                ORDER BY id DESC LIMIT 1
+            ''')
+            if cursor.rowcount > 0:
+                return cursor.fetchone()[0]
+            return 0
+
+    def __save_bulk_import_validation_checkpoint(self, chunk_end_pk: int, is_valid: bool):
+        """Save bulk import validation checkpoint to database"""
+        with self.db.cursor() as cursor:
+            cursor: Cursor
+            cursor.execute(f'''
+                INSERT INTO {config.SBOSC_DB}.bulk_import_validation_status
+                (migration_id, chunk_end_pk, is_valid, created_at)
+                VALUES ({self.migration_id}, {chunk_end_pk}, {is_valid}, NOW())
+            ''')
+        self.logger.info(f"Saved validation checkpoint: chunk_end_pk={chunk_end_pk}, is_valid={is_valid}")
 
     def __handle_operational_error(self, e, range_queue, start_range, end_range):
         if e.args[0] == 2013:
@@ -81,23 +107,47 @@ class DataValidator:
     def bulk_import_validation(self):
         self.logger.info("Start bulk import validation")
         metadata = self.redis_data.metadata
-        range_queue = Queue()
-        start_pk = 0
-        while start_pk <= metadata.max_pk:
-            range_queue.put((start_pk, min(start_pk + self.bulk_import_batch_size, metadata.max_pk)))
-            start_pk += self.bulk_import_batch_size + 1
-        failed_pks = []
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.thread_count) as executor:
-            threads = []
-            for _ in range(self.thread_count):
-                threads.append(executor.submit(self.__validate_bulk_import_batch, range_queue, failed_pks))
-            is_valid = all([thread.result() for thread in threads])
-            if not is_valid:
+        # Get last checkpoint
+        last_validated_pk = self.__get_bulk_import_last_validated_pk()
+        if last_validated_pk > 0:
+            self.logger.info(f"Resuming from checkpoint: last_validated_pk={last_validated_pk}")
+
+        # Process in chunks (sequentially for checkpointing)
+        chunk_start_pk = last_validated_pk + 1 if last_validated_pk > 0 else 0
+
+        while chunk_start_pk <= metadata.max_pk:
+            chunk_end_pk = min(chunk_start_pk + self.bulk_import_chunk_size - 1, metadata.max_pk)
+            self.logger.info(f"Validating chunk: {chunk_start_pk} - {chunk_end_pk}")
+
+            # Create batches within this chunk
+            range_queue = Queue()
+            batch_start = chunk_start_pk
+            while batch_start <= chunk_end_pk:
+                range_queue.put((batch_start, min(batch_start + self.bulk_import_batch_size, chunk_end_pk)))
+                batch_start += self.bulk_import_batch_size + 1
+
+            failed_pks = []
+
+            # Multi-threaded validation within chunk
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.thread_count) as executor:
+                threads = []
+                for _ in range(self.thread_count):
+                    threads.append(executor.submit(self.__validate_bulk_import_batch, range_queue, failed_pks))
+                is_chunk_valid = all([thread.result() for thread in threads])
+
+            # Save checkpoint
+            self.__save_bulk_import_validation_checkpoint(chunk_end_pk, is_chunk_valid)
+
+            if not is_chunk_valid:
                 self.logger.critical(f"Failed to validate bulk import. Failed pks: {failed_pks}")
-            else:
-                self.logger.info("Bulk import validation succeeded")
-            return is_valid
+                return False
+
+            self.logger.info(f"Chunk validation succeeded: {chunk_start_pk} - {chunk_end_pk}")
+            chunk_start_pk = chunk_end_pk + 1
+
+        self.logger.info("Bulk import validation succeeded")
+        return True
 
     def __get_timestamp_range(self):
         start_timestamp = None
@@ -357,49 +407,79 @@ class DataValidator:
         with self.db.cursor(role='reader') as cursor:
             cursor: Cursor
             cursor.execute(f'''
-                SELECT created_at FROM {config.SBOSC_DB}.full_dml_event_validation_status
+                SELECT last_validated_timestamp, target_end_timestamp
+                FROM {config.SBOSC_DB}.full_dml_event_validation_status
                 WHERE migration_id = {self.migration_id} ORDER BY id DESC LIMIT 1
             ''')
 
+            last_validated_timestamp = 0
+            target_end_timestamp = 0
             if cursor.rowcount > 0:
-                last_validation_time = cursor.fetchone()[0]
-                if datetime.now() - last_validation_time < timedelta(hours=self.full_dml_event_validation_interval):
-                    self.logger.info(
-                        f"Last validation was done less than {self.full_dml_event_validation_interval} hour ago. "
-                        f"Skipping full DML event validation"
-                    )
-                    return False
+                last_validated_timestamp, target_end_timestamp = cursor.fetchone()
 
-            cursor.execute(f'''
-                SELECT MIN(event_timestamps.min_ts) FROM (
-                    SELECT MIN(event_timestamp) AS min_ts FROM {config.SBOSC_DB}.inserted_pk_{self.migration_id} UNION
-                    SELECT MIN(event_timestamp) AS min_ts FROM {config.SBOSC_DB}.updated_pk_{self.migration_id} UNION
-                    SELECT MIN(event_timestamp) AS min_ts FROM {config.SBOSC_DB}.deleted_pk_{self.migration_id}
-                ) AS event_timestamps;
-            ''')
-            if cursor.rowcount > 0:
-                start_timestamp = cursor.fetchone()[0]
-                if start_timestamp is None:
+        interval = timedelta(hours=self.full_dml_event_validation_interval)
+        if last_validated_timestamp == target_end_timestamp and \
+                datetime.now() - datetime.fromtimestamp(target_end_timestamp) < interval:
+            self.logger.info(
+                f"Last validation was done less than {self.full_dml_event_validation_interval} hour ago. "
+                f"Skipping full DML event validation"
+            )
+            return False
+        else:
+            if last_validated_timestamp < target_end_timestamp:
+                # Full DML event validation didn't finish in the last run
+                start_timestamp = last_validated_timestamp + 1
+                end_timestamp = target_end_timestamp
+            else:
+                # First or new full DML event validation
+                start_timestamp = 0
+                end_timestamp = 0
+                with self.db.cursor(role='reader') as cursor:
+                    cursor.execute(f'''
+                        SELECT MIN(event_timestamps.min_ts) FROM (
+                            SELECT MIN(event_timestamp) AS min_ts
+                            FROM {config.SBOSC_DB}.inserted_pk_{self.migration_id} UNION
+                            SELECT MIN(event_timestamp) AS min_ts
+                            FROM {config.SBOSC_DB}.updated_pk_{self.migration_id} UNION
+                            SELECT MIN(event_timestamp) AS min_ts
+                            FROM {config.SBOSC_DB}.deleted_pk_{self.migration_id}
+                        ) AS event_timestamps;
+                    ''')
+                    if cursor.rowcount > 0:
+                        start_timestamp = cursor.fetchone()[0]
+
+                    cursor.execute(f'''
+                        SELECT last_event_timestamp FROM {config.SBOSC_DB}.event_handler_status
+                        WHERE migration_id = {self.migration_id} ORDER BY id DESC LIMIT 1
+                    ''')
+                    if cursor.rowcount > 0:
+                        end_timestamp = cursor.fetchone()[0]
+
+                if start_timestamp is None or start_timestamp == 0:
                     self.logger.warning("No events found. Skipping full DML event validation")
                     return False
-
-            cursor.execute(f'''
-                SELECT last_event_timestamp FROM {config.SBOSC_DB}.event_handler_status
-                WHERE migration_id = {self.migration_id} ORDER BY id DESC LIMIT 1
-            ''')
-            if cursor.rowcount > 0:
-                end_timestamp = cursor.fetchone()[0]
-                if end_timestamp is None:
+                if end_timestamp is None or end_timestamp == 0:
                     self.logger.warning("Failed to get valid end_timestamp")
                     return False
 
-        is_valid = self.validate_apply_dml_events(start_timestamp, end_timestamp)
+            target_end_timestamp = end_timestamp
+            chunk_start_timestamp = start_timestamp
 
-        with self.db.cursor() as cursor:
-            cursor.execute(f'''
-                INSERT INTO {config.SBOSC_DB}.full_dml_event_validation_status
-                (migration_id, last_validated_timestamp, is_valid, created_at)
-                VALUES ({self.migration_id}, {end_timestamp}, {is_valid}, NOW())
-            ''')
+            while chunk_start_timestamp <= target_end_timestamp:
+                chunk_end_timestamp = min(
+                    chunk_start_timestamp + self.full_dml_event_validation_chunk_duration,
+                    target_end_timestamp
+                )
 
-        return True
+                is_valid = self.validate_apply_dml_events(chunk_start_timestamp, chunk_end_timestamp)
+
+                with self.db.cursor() as cursor:
+                    cursor.execute(f'''
+                        INSERT INTO {config.SBOSC_DB}.full_dml_event_validation_status
+                        (migration_id, target_end_timestamp, last_validated_timestamp, is_valid, created_at)
+                        VALUES ({self.migration_id}, {target_end_timestamp}, {chunk_end_timestamp}, {is_valid}, NOW())
+                    ''')
+
+                chunk_start_timestamp = chunk_end_timestamp + 1
+
+            return True

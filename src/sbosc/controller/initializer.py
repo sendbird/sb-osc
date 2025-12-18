@@ -13,7 +13,8 @@ REQUIRED_TABLES = [
     # Controller
     "migration_plan", "chunk_info",
     "apply_dml_events_status", "index_creation_status",
-    "apply_dml_events_validation_status", "full_dml_event_validation_status", "unmatched_rows",
+    "apply_dml_events_validation_status", "full_dml_event_validation_status",
+    "bulk_import_validation_status", "unmatched_rows",
     # EventHandler
     "event_handler_status"
 ]
@@ -120,6 +121,7 @@ class Initializer:
                 CREATE TABLE IF NOT EXISTS full_dml_event_validation_status (
                     id int PRIMARY KEY AUTO_INCREMENT,
                     migration_id int,
+                    target_end_timestamp bigint,
                     last_validated_timestamp bigint,
                     is_valid bool,
                     created_at datetime,
@@ -127,6 +129,18 @@ class Initializer:
                 ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
             ''')
             self.logger.info("Full DML event validation status table created")
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS bulk_import_validation_status (
+                    id int PRIMARY KEY AUTO_INCREMENT,
+                    migration_id int,
+                    chunk_end_pk bigint,
+                    is_valid bool,
+                    created_at datetime,
+                    KEY `idx_bulk_import_validation_status_migration_id` (`migration_id`)
+                ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+            ''')
+            self.logger.info("Bulk import validation status table created")
 
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS unmatched_rows (
