@@ -5,6 +5,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    ca-certificates \
     default-libmysqlclient-dev \
     default-mysql-client \
     && apt-get clean \
